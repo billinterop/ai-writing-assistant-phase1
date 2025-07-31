@@ -1,0 +1,127 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>AI Writing Assistant – Phase 1</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div class="container">
+    <div class="left-panel">
+      <h2>AI Writing Assistant</h2>
+
+      <div class="accordion">
+        <button class="accordion-toggle">🎯 Your writing goal</button>
+
+        <details class="guidance">
+  <summary>➕ Need help? Expand for tips and examples</summary>
+  <p><strong>Clarify your purpose</strong><br>
+  What is this piece really trying to do? Go beyond the format and name the outcome. Are you informing? Persuading? Preparing someone to act?</p>
+
+  <p><strong>Why it matters</strong><br>
+  A clear goal helps you write faster, get better suggestions, and avoid fuzzy feedback later.</p>
+
+  <p><strong>Coaching cue</strong><br>
+  Ask:<br>
+  “What do I want the reader to understand, feel, or do after reading this?”</p>
+
+  <p><strong>Examples</strong></p>
+  <ul>
+    <li><em>A one-pager to help our VP prep for a client meeting</em></li>
+    <li><em>A proposal to convince the team to shift priorities</em></li>
+    <li><em>A briefing that explains our policy shift to partners</em></li>
+  </ul>
+</details>
+
+        <input type="text" placeholder="e.g., A short summary to help leadership align on next steps" id="goal" />
+      </div>
+
+      <div class="accordion">
+        <button class="accordion-toggle">👥 Target audience</button>
+        <details class="guidance">
+  <summary>➕ Need help? Expand for tips and examples</summary>
+  <p><strong>Identify your real audience</strong><br>
+  Who will actually read this? Not just their title — but their perspective, priorities, and what they already know (or assume). Be specific.</p>
+
+  <p><strong>Why it matters</strong><br>
+  Knowing your audience helps you choose the right tone, examples, and level of detail. It makes your writing land.</p>
+
+  <p><strong>Coaching cue</strong><br>
+  Ask:<br>
+  “What does this reader need from me? What might they push back on?”</p>
+
+  <p><strong>Examples</strong></p>
+  <ul>
+    <li><em>A new team lead unfamiliar with our legacy process</em></li>
+    <li><em>Senior executives focused on policy risk</em></li>
+    <li><em>External partners with limited technical background</em></li>
+  </ul>
+</details>
+        <input type="text" placeholder="e.g., Senior managers deciding on next year’s priorities" id="audience" />
+      </div>
+
+      <div class="accordion">
+        <button class="accordion-toggle">🎙️ Tone & voice</button>
+         <details class="guidance">
+  <summary>➕ Need help? Expand for tips and examples</summary>
+  <p><strong>Choose the tone that fits your audience</strong><br>
+  Tone shapes how your message lands. A formal tone signals professionalism and authority. A conversational tone may build rapport and clarity. Business casual often strikes a balance.</p>
+
+  <p><strong>Why it matters</strong><br>
+ Your tone should match the relationship. A legal update, a team check-in, and a proposal to a skeptical audience might all require different voices.</p>
+
+  <p><strong>Coaching cue</strong><br>
+  Ask:<br>
+  “What tone will help this audience hear and trust what I’m saying?”</p>
+
+  <p><strong>Examples</strong></p>
+  <ul>
+    <li><strong>Business formal</strong> — <em>An external policy memo to partners or regulators</em></li>
+    <li><strong>Business casual</strong> — <em>An internal update to managers across departments</em></li>
+    <li><strong>Conversational</strong> — <em>A quick explainer for peers or a first-draft concept note</em></li>
+    <li><strong>Or describe your tone below</strong> — e.g., <em>encouraging, candid, measured, supportive</em></li>
+  </ul>
+</details>
+          <p>How do you want to come across? Choose a preset or describe your tone.</p>
+
+        <select id="tone">
+          <option>Business formal</option>
+          <option>Business casual</option>
+          <option>Conversational</option>
+          <option disabled>────────────</option>
+          <option>Or describe your tone below</option>
+        </select>
+        <input type="text" placeholder="e.g., Warm, plainspoken, and confident — with no jargon" id="customTone" />
+      </div>
+
+      <button class="next-button" onclick="saveEntry()">Save entry</button>
+    </div>
+
+    <div class="right-panel">
+      <h2>Phase 1 – Clarify Your Intent</h2>
+      <div id="summary">
+        <div class="summary-block">
+          <h3>🎯 Writing Goal</h3>
+          <p id="savedGoal"></p>
+        </div>
+        <div class="summary-block">
+          <h3>👥 Target Audience</h3>
+          <p id="savedAudience"></p>
+        </div>
+        <div class="summary-block">
+          <h3>🎙️ Tone & Voice</h3>
+          <p id="savedTone"></p>
+        </div>
+      </div>
+        <hr />
+
+  <div class="next-phase">
+    <p class="up-next-label">Up next: <strong>Phase 2 – Gather your material</strong></p>
+    <button class="next-button">Continue to Phase 2 →</button>
+    </div>
+  </div>
+  <script src="script.js"></script>
+</body>
+</html>
