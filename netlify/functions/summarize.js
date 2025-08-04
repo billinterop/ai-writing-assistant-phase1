@@ -62,3 +62,5 @@ exports.handler = async (event) => {
     stack: error.stack
   })
 };
+  }
+};
