@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Summarize File Upload Test</title>
+  <style>
+    body { font-family: sans-serif; padding: 2rem; max-width: 600px; margin: auto; }
+    textarea { width: 100%; height: 200px; margin-top: 1rem; }
+    .status { margin-top: 1rem; font-weight: bold; }
+  </style>
+</head>
+<body>
+  <h1>Summarize a File</h1>
+  <p>Select a <strong>.pdf</strong>, <strong>.docx</strong>, or <strong>.txt</strong> file:</p>
+  
+  <input type="file" id="fileInput" />
+  <button id="submitBtn">Upload and Summarize</button>
+  
+  <div class="status" id="statusMsg"></div>
+  
+  <h2>Summary:</h2>
+  <textarea id="summaryBox" readonly></textarea>
+
+  <script>
+    const submitBtn = document.getElementById("submitBtn");
+    const fileInput = document.getElementById("fileInput");
+    const statusMsg = document.getElementById("statusMsg");
+    const summaryBox = document.getElementById("summaryBox");
+
+    submitBtn.onclick = async () => {
+      const file = fileInput.files[0];
+      if (!file) {
+        alert("Please select a file.");
+        return;
+      }
+
+      const fileType = file.name.endsWith(".pdf")
+        ? "pdf"
+        : file.name.endsWith(".docx")
+        ? "docx"
+        : file.name.endsWith(".txt")
+        ? "txt"
+        : null;
+
+      if (!fileType) {
+        alert("Unsupported file type.");
+        return;
+      }
+
+      statusMsg.textContent = "Uploading and summarizing...";
+
+      const reader = new FileReader();
+      reader.onload = async function () {
+        const base64Content = reader.result.split(",")[1];
+
+        const response = await fetch("/.netlify/functions/summarize", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            fileName: file.name,
+            fileType: fileType,
+            base64Content: base64Content,
+          }),
+        });
+
+        const result = await response.json();
+        if (response.ok) {
+          summaryBox.value = result.summary || "No summary returned.";
+          statusMsg.textContent = "✅ Success!";
+        } else {
+          summaryBox.value = result.error || "Something went wrong.";
+          statusMsg.textContent = "❌ Error: " + (result.error || "Unknown error");
+        }
+      };
+
+      reader.readAsDataURL(file);
+    };
+  </script>
+</body>
+</html>
