@@ -1,5 +1,5 @@
 // /netlify/functions/summarize.js (compatible with openai@3.2.1)
-
+// openai@3.2.1 confirmed
 const { Configuration, OpenAIApi } = require("openai");
 const mammoth = require("mammoth");
 const pdfParse = require("pdf-parse");
