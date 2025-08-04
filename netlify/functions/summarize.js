@@ -1,16 +1,65 @@
-// /netlify/functions/summarize.js (no openai SDK, using fetch)
-// Updated 2025-08-04 - force redeploy
-const fetch = require("node-fetch");
+// /netlify/functions/summarize.js – uses built-in https instead of node-fetch
+
+const https = require("https");
 const mammoth = require("mammoth");
 const pdfParse = require("pdf-parse");
 
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 
+function callOpenAI(prompt) {
+  return new Promise((resolve, reject) => {
+    const data = JSON.stringify({
+      model: "gpt-4",
+      messages: [
+        {
+          role: "system",
+          content: "You are a helpful assistant that extracts key information from raw source content."
+        },
+        {
+          role: "user",
+          content: prompt
+        }
+      ],
+      max_tokens: 600,
+      temperature: 0.5
+    });
+
+    const options = {
+      hostname: "api.openai.com",
+      path: "/v1/chat/completions",
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${OPENAI_API_KEY}`,
+        "Content-Length": Buffer.byteLength(data)
+      }
+    };
+
+    const req = https.request(options, (res) => {
+      let responseData = "";
+      res.on("data", (chunk) => responseData += chunk);
+      res.on("end", () => {
+        try {
+          const result = JSON.parse(responseData);
+          const summary = result.choices?.[0]?.message?.content || "No summary returned.";
+          resolve(summary);
+        } catch (e) {
+          reject(e);
+        }
+      });
+    });
+
+    req.on("error", (e) => reject(e));
+    req.write(data);
+    req.end();
+  });
+}
+
 exports.handler = async (event) => {
   if (event.httpMethod !== "POST") {
     return {
       statusCode: 405,
-      body: "Method Not Allowed",
+      body: "Method Not Allowed"
     };
   }
 
@@ -31,42 +80,16 @@ exports.handler = async (event) => {
     } else {
       return {
         statusCode: 400,
-        body: "Unsupported file type",
+        body: "Unsupported file type"
       };
     }
 
     const prompt = `Summarize the following content into bullet points for someone writing a briefing document:\n\n"""\n${extractedText}\n"""`;
-
-    const openaiResponse = await fetch("https://api.openai.com/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${OPENAI_API_KEY}`,
-      },
-      body: JSON.stringify({
-        model: "gpt-4",
-        messages: [
-          {
-            role: "system",
-            content:
-              "You are a helpful assistant that extracts key information from raw source content.",
-          },
-          {
-            role: "user",
-            content: prompt,
-          },
-        ],
-        max_tokens: 600,
-        temperature: 0.5,
-      }),
-    });
-
-    const json = await openaiResponse.json();
-    const summary = json.choices?.[0]?.message?.content || "No summary returned.";
+    const summary = await callOpenAI(prompt);
 
     return {
       statusCode: 200,
-      body: JSON.stringify({ summary }),
+      body: JSON.stringify({ summary })
     };
   } catch (error) {
     console.error("Error in summarize function:", error);
@@ -74,8 +97,8 @@ exports.handler = async (event) => {
       statusCode: 500,
       body: JSON.stringify({
         error: error.message || "Internal Server Error",
-        stack: error.stack,
-      }),
+        stack: error.stack
+      })
     };
   }
 };
