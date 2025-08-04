@@ -84,7 +84,7 @@ exports.handler = async (event) => {
       };
     }
 
-    const prompt = `Summarize the following content into bullet points for someone writing a briefing document:\n\n"""\n${extractedText}\n"""`;
+    const prompt = `Write a short executive summary of the following material in clear, professional language. Then list 3–5 key takeaways:\n\n"""\n${extractedText}\n"""`;
     const summary = await callOpenAI(prompt);
 
     return {
