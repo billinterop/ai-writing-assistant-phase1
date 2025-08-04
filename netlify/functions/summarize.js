@@ -1,13 +1,10 @@
-// /netlify/functions/summarize.js (compatible with openai@3.2.1)
-// openai@3.2.1 confirmed
-const { Configuration, OpenAIApi } = require("openai");
+// /netlify/functions/summarize.js (no openai SDK, using fetch)
+// Updated 2025-08-04 - force redeploy
+const fetch = require("node-fetch");
 const mammoth = require("mammoth");
 const pdfParse = require("pdf-parse");
 
-const configuration = new Configuration({
-  apiKey: process.env.OPENAI_API_KEY,
-});
-const openai = new OpenAIApi(configuration);
+const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 
 exports.handler = async (event) => {
   if (event.httpMethod !== "POST") {
@@ -40,21 +37,32 @@ exports.handler = async (event) => {
 
     const prompt = `Summarize the following content into bullet points for someone writing a briefing document:\n\n"""\n${extractedText}\n"""`;
 
-    const completion = await openai.createChatCompletion({
-      model: "gpt-4",
-      messages: [
-        {
-          role: "system",
-          content:
-            "You are a helpful assistant that extracts key information from raw source content.",
-        },
-        { role: "user", content: prompt },
-      ],
-      max_tokens: 600,
-      temperature: 0.5,
+    const openaiResponse = await fetch("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${OPENAI_API_KEY}`,
+      },
+      body: JSON.stringify({
+        model: "gpt-4",
+        messages: [
+          {
+            role: "system",
+            content:
+              "You are a helpful assistant that extracts key information from raw source content.",
+          },
+          {
+            role: "user",
+            content: prompt,
+          },
+        ],
+        max_tokens: 600,
+        temperature: 0.5,
+      }),
     });
 
-    const summary = completion.data.choices[0].message.content;
+    const json = await openaiResponse.json();
+    const summary = json.choices?.[0]?.message?.content || "No summary returned.";
 
     return {
       statusCode: 200,
