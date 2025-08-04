@@ -56,8 +56,9 @@ exports.handler = async (event) => {
   } catch (error) {
     console.error("Error in summarize function:", error);
     return {
-      statusCode: 500,
-      body: JSON.stringify({ error: error.message || "Internal Server Error" })
-    };
-  }
+  statusCode: 500,
+  body: JSON.stringify({
+    error: error.message || "Internal Server Error",
+    stack: error.stack
+  })
 };
