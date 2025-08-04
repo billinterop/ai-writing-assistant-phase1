@@ -1,8 +1,6 @@
-// /netlify/functions/summarize.js
+// /netlify/functions/summarize.js (compatible with openai@3.2.1)
 
 const { Configuration, OpenAIApi } = require("openai");
-const fs = require("fs");
-const path = require("path");
 const mammoth = require("mammoth");
 const pdfParse = require("pdf-parse");
 
@@ -13,7 +11,10 @@ const openai = new OpenAIApi(configuration);
 
 exports.handler = async (event) => {
   if (event.httpMethod !== "POST") {
-    return { statusCode: 405, body: "Method Not Allowed" };
+    return {
+      statusCode: 405,
+      body: "Method Not Allowed",
+    };
   }
 
   try {
@@ -31,7 +32,10 @@ exports.handler = async (event) => {
     } else if (fileType === "txt") {
       extractedText = buffer.toString("utf-8");
     } else {
-      return { statusCode: 400, body: "Unsupported file type" };
+      return {
+        statusCode: 400,
+        body: "Unsupported file type",
+      };
     }
 
     const prompt = `Summarize the following content into bullet points for someone writing a briefing document:\n\n"""\n${extractedText}\n"""`;
@@ -39,28 +43,31 @@ exports.handler = async (event) => {
     const completion = await openai.createChatCompletion({
       model: "gpt-4",
       messages: [
-        { role: "system", content: "You are a helpful assistant that extracts key information from raw source content." },
-        { role: "user", content: prompt }
+        {
+          role: "system",
+          content:
+            "You are a helpful assistant that extracts key information from raw source content.",
+        },
+        { role: "user", content: prompt },
       ],
       max_tokens: 600,
-      temperature: 0.5
+      temperature: 0.5,
     });
 
     const summary = completion.data.choices[0].message.content;
 
     return {
       statusCode: 200,
-      body: JSON.stringify({ summary })
+      body: JSON.stringify({ summary }),
     };
-
   } catch (error) {
     console.error("Error in summarize function:", error);
     return {
-  statusCode: 500,
-  body: JSON.stringify({
-    error: error.message || "Internal Server Error",
-    stack: error.stack
-  })
-};
+      statusCode: 500,
+      body: JSON.stringify({
+        error: error.message || "Internal Server Error",
+        stack: error.stack,
+      }),
+    };
   }
 };
