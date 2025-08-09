@@ -210,7 +210,7 @@ export default function Phase2Gather() {
             value={noteDraft}
             onChange={(e) => setNoteDraft(e.target.value)}
           />
-          <div className="mt-2 flex items-center gap-2">
+        <div className="mt-2 flex items-center gap-2">
             <button
               className="px-3 py-1 text-sm border rounded"
               onClick={addNote}
@@ -293,6 +293,21 @@ export default function Phase2Gather() {
 
         {error && <div className="text-sm text-red-600 mb-3">{error}</div>}
 
+        {/* Top action bar (only when content exists) */}
+        {(combinedBullets.length > 0 || results.length > 0) && (
+          <div className="flex gap-2 mb-3">
+            <button className="px-3 py-1 text-sm border rounded" onClick={handleCopy}>
+              Copy
+            </button>
+            <button className="px-3 py-1 text-sm border rounded" onClick={handleDownload}>
+              Download .txt
+            </button>
+            <button className="px-3 py-1 text-sm border rounded" onClick={handleInsertIntoDraft}>
+              Save Summary for Phase 3
+            </button>
+          </div>
+        )}
+
         {!isSummarizing && results.length === 0 && combinedBullets.length === 0 ? (
           <p className="text-gray-500 italic">
             No summaries yet. Upload files and/or add notes, then click <b>Summarize All</b>.
@@ -301,6 +316,7 @@ export default function Phase2Gather() {
 
         {isSummarizing && <div className="text-sm text-gray-600 mb-3">Summarizing…</div>}
 
+        {/* Combined view */}
         {!isSummarizing && mode === "combined" && combinedBullets.length > 0 && (
           <div className="bg-gray-50 border rounded p-4 mb-24">
             <h4 className="font-medium mb-2">Key Points from Your Material</h4>
@@ -312,6 +328,7 @@ export default function Phase2Gather() {
           </div>
         )}
 
+        {/* Per-file view */}
         {!isSummarizing && mode === "per-file" && results.length > 0 && (
           <div className="space-y-4 mb-24">
             {results.map((r, idx) => (
@@ -327,18 +344,9 @@ export default function Phase2Gather() {
           </div>
         )}
 
-        {/* Actions (sticky bottom) */}
+        {/* Sticky bottom: Continue only (auto-saves first) */}
         {(combinedBullets.length > 0 || results.length > 0) && (
-          <div className="sticky bottom-0 bg-white border-t pt-3 flex gap-2">
-            <button className="px-3 py-1 text-sm border rounded" onClick={handleCopy}>
-              Copy
-            </button>
-            <button className="px-3 py-1 text-sm border rounded" onClick={handleDownload}>
-              Download .txt
-            </button>
-            <button className="px-3 py-1 text-sm border rounded" onClick={handleInsertIntoDraft}>
-              Save Summary for Phase 3
-            </button>
+          <div className="sticky bottom-0 bg-white border-t pt-3 flex">
             <button
               className="ml-auto px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
               onClick={() => {
@@ -346,7 +354,7 @@ export default function Phase2Gather() {
                 window.location.href = "https://interopsystems.com";
               }}
             >
-              Continue to Phase 3
+              Save Summary and Continue to Phase 3
             </button>
           </div>
         )}
