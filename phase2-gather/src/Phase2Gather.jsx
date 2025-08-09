@@ -212,46 +212,52 @@ export default function Phase2Gather() {
           )}
         </div>
 
-        {/* Notes */}
-        <div className="mb-4">
-          <label className="block font-medium mb-2">Paste notes or text:</label>
-          <textarea
-            placeholder="Paste copied text or write here..."
-            rows={6}
-            className="border p-2 rounded w-full"
-            value={noteDraft}
-            onChange={(e) => setNoteDraft(e.target.value)}
-          />
-          <div className="mt-2 flex items-center gap-2">
-            <button
-              className="px-3 py-1 text-sm border rounded"
-              onClick={addNote}
-              disabled={!noteDraft.trim()}
-            >
-              Add note
-            </button>
-            {notes.length > 0 && (
-              <>
-                <span className="text-sm text-gray-600">
-                  {notes.length} saved note{notes.length > 1 ? "s" : ""}
-                </span>
-                <button
-                  className="ml-auto text-xs px-2 py-1 border rounded"
-                  onClick={clearNotes}
-                >
-                  Clear notes
-                </button>
-              </>
-            )}
-          </div>
-          {notes.length > 0 && (
-            <ul className="mt-2 text-sm text-gray-600 list-disc pl-5">
-              {notes.map((_, idx) => (
-                <li key={idx}>Note #{idx + 1}</li>
-              ))}
-            </ul>
-          )}
-        </div>
+{/* Notes */}
+<div className="mb-4">
+  <label className="block font-medium mb-2">
+    Paste notes or text:
+    <span className="block text-sm text-gray-500 font-normal">
+      Add facts, excerpts, or fragments not covered in your uploaded files. 
+      One main idea per line works best. This content will be summarized alongside your files in the next phase.
+    </span>
+  </label>
+  <textarea
+    placeholder="Paste copied text or write here..."
+    rows={6}
+    className="border p-2 rounded w-full"
+    value={noteDraft}
+    onChange={(e) => setNoteDraft(e.target.value)}
+  />
+  <div className="mt-2 flex items-center gap-2">
+    <button
+      className="px-3 py-1 text-sm border rounded"
+      onClick={addNote}
+      disabled={!noteDraft.trim()}
+    >
+      Add note
+    </button>
+    {notes.length > 0 && (
+      <>
+        <span className="text-sm text-gray-600">
+          {notes.length} saved note{notes.length > 1 ? "s" : ""}
+        </span>
+        <button
+          className="px-2 py-1 text-xs border rounded text-gray-600 hover:text-red-600"
+          onClick={() => setNotes([])}
+        >
+          Clear notes
+        </button>
+      </>
+    )}
+  </div>
+  {notes.length > 0 && (
+    <ul className="mt-2 text-sm text-gray-600 list-disc pl-5">
+      {notes.map((_, idx) => (
+        <li key={idx}>Note #{idx + 1}</li>
+      ))}
+    </ul>
+  )}
+</div>
 
         {/* View toggle + Summarize */}
         <div className="mt-6 flex items-center gap-4">
