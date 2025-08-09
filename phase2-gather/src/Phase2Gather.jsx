@@ -114,13 +114,15 @@ export default function Phase2Gather() {
   };
 
   // Helpers for actions
-  const buildTextForExport = () => {
-    return mode === "combined"
-      ? ["Key Points from Your Material:", ...combinedBullets.map((b) => `• ${b}`)].join("\n")
-      : results
-          .map((r) => [`# ${r.name}`, ...r.bullets.map((b) => `• ${b}`)].join("\n"))
-          .join("\n\n");
-  };
+const buildTextForExport = () => {
+  if (mode === "combined") {
+    return `Key Points from Your Material\n${combinedBullets.map((b) => `• ${b}`).join("\n")}`;
+  } else {
+    return results
+      .map((r) => [`# ${r.name}`, ...r.bullets.map((b) => `• ${b}`)].join("\n"))
+      .join("\n\n");
+  }
+};
 
   const handleCopy = () => {
     navigator.clipboard.writeText(buildTextForExport());
