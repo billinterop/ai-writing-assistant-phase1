@@ -20,27 +20,29 @@ export default function Phase2Gather() {
 
   // Call Netlify function for a single "file-like" item
   async function summarizeOne(fileLike) {
-    const form = new FormData();
-    form.append("file", fileLike, fileLike.name || "upload.bin");
+  const form = new FormData();
+  form.append("file", fileLike, fileLike.name || "upload.bin");
 
-    const res = await fetch("/.netlify/functions/summarize", {
-      method: "POST",
-      body: form,
-    });
+  const res = await fetch("/.netlify/functions/summarize", {
+    method: "POST",
+    body: form,
+  });
 
-    if (!res.ok) {
-      throw new Error(`Summarize failed (${res.status})`);
-    }
+  const text = await res.text();
+  let data = {};
+  try { data = JSON.parse(text); } catch (_) {}
 
-    // Expecting { summary: "• bullet\n• bullet\n..." }
-    const data = await res.json();
-    const bullets = (data.summary || "")
-      .split("\n")
-      .map((s) => s.replace(/^[-•\s]+/, "").trim())
-      .filter(Boolean);
-
-    return bullets;
+  if (!res.ok) {
+    throw new Error(data?.error || `Summarize failed (${res.status})`);
   }
+
+  const bullets = (data.summary || "")
+    .split("\n")
+    .map((s) => s.replace(/^[-•\s]+/, "").trim())
+    .filter(Boolean);
+
+  return bullets;
+}
 
   // Summarize all files + optional notes
   const handleSummarizeClick = async () => {
