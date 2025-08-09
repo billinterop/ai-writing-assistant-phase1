@@ -150,15 +150,21 @@ export default function Phase2Gather() {
   };
 
   const handleInsertIntoDraft = () => {
-    const payload = {
-      mode,
-      combinedBullets,
-      results,
-      savedAt: new Date().toISOString(),
-    };
-    localStorage.setItem("phase3_seed_summary", JSON.stringify(payload));
-    alert("Saved for Phase 3.");
+  const payload = {
+    mode,
+    combinedBullets,
+    results,
+    savedAt: new Date().toISOString(),
+    sourceFiles: files.map(f => ({
+      name: f.name,
+      type: f.type || "unknown",
+      size: f.size || 0
+    })),
+    noteCount: notes.length
   };
+  localStorage.setItem("phase3_seed_summary", JSON.stringify(payload));
+  alert("Saved for Phase 3.");
+};
 
   // ---------- UI ----------
   return (
