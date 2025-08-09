@@ -202,9 +202,9 @@ export default function Phase2Gather() {
 
         {/* Notes */}
         <div className="mb-4">
-          <label className="block font-medium mb-2">Paste notes or text:</label>
+          <label className="block font-medium mb-2">Add notes:</label>
           <textarea
-            placeholder="Paste excerpts, rough thoughts, quotes, or key stats you want to bring into this piece. (Your goals, audience, and tone from Phase 1 are already carried forward.)"
+            placeholder="Write or paste excerpts, rough notes, quotes, or key stats you want to bring into this piece. (Your goals, audience, and tone from Phase 1 are already carried forward.)"
             rows={6}
             className="border p-2 rounded w-full"
             value={noteDraft}
