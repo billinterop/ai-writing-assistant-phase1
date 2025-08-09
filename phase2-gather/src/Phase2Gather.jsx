@@ -9,21 +9,14 @@ export default function Phase2Gather() {
   // Output + UI state
   const [results, setResults] = useState([]);        // [{ name, bullets: [] }]
   const [combinedBullets, setCombinedBullets] = useState([]);
-  const [mode, setMode] = useState("combined");      // 'combined' | 'per-file'
+  const [mode, setMode] = useState("combined");      // 'combined' | 'per-file' (combined result labeled)
   const [isSummarizing, setIsSummarizing] = useState(false);
   const [error, setError] = useState("");
 
-  // ---------- UI helpers ----------
   const handleFileChange = (e) => {
     const newFiles = Array.from(e.target.files || []);
     setFiles((prev) => [...prev, ...newFiles]);
   };
-
-  const removeFileAt = (idx) => {
-    setFiles((prev) => prev.filter((_, i) => i !== idx));
-  };
-
-  const clearFiles = () => setFiles([]);
 
   const addNote = () => {
     const v = noteDraft.trim();
@@ -32,49 +25,21 @@ export default function Phase2Gather() {
     setNoteDraft("");
   };
 
-  // ---------- Utilities ----------
-  // Read a File -> JSON blob suitable for the server JSON API
+  // Helper: read a File -> { name, type, base64 }
   const fileToJSON = (file) =>
     new Promise((resolve, reject) => {
       const reader = new FileReader();
       reader.onerror = (e) => reject(e);
       reader.onload = () => {
         const result = reader.result || "";
+        // result is data:...;base64,XXXX
         const base64 = String(result).split(",")[1] || "";
         resolve({ name: file.name, type: file.type || "", base64 });
       };
       reader.readAsDataURL(file);
     });
 
-  // Normalize model text -> array of bullets and strip the heading line if present
-  const toBullets = (text) => {
-    const lines = (text || "").split("\n").map((s) => s.replace(/^[-•\s]+/, "").trim());
-    const cleaned = lines.filter(Boolean);
-    if (cleaned.length && /^key points from your material[:]?$/i.test(cleaned[0])) {
-      cleaned.shift(); // drop the heading line
-    }
-    return cleaned;
-  };
-
-  // Call JSON endpoint with { files, notes } and return bullets[]
-  async function summarizeJSON({ filesJson = [], notesArr = [] }) {
-    const res = await fetch("/.netlify/functions/summarize", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ files: filesJson, notes: notesArr }),
-    });
-
-    const raw = await res.text();
-    let data = {};
-    try { data = JSON.parse(raw); } catch { /* ignore */ }
-
-    if (!res.ok) {
-      throw new Error(data?.error || `Summarize failed (${res.status})`);
-    }
-    return toBullets(data.summary || "");
-  }
-
-  // ---------- Main action ----------
+  // Send everything as JSON (no multipart)
   const summarizeAll = async () => {
     setError("");
     setIsSummarizing(true);
@@ -83,38 +48,53 @@ export default function Phase2Gather() {
 
     try {
       const draft = noteDraft.trim();
-      const hasAny = files.length > 0 || notes.length > 0 || !!draft;
-      if (!hasAny) {
+      if (files.length === 0 && notes.length === 0 && !draft) {
         setError("Please add at least one file or some notes.");
+        setIsSummarizing(false);
         return;
       }
 
-      // Build payloads
-      const filesJson = await Promise.all(files.map(fileToJSON));
-      const notesArr = draft ? [...notes, draft] : [...notes];
+      const filePayload = await Promise.all(files.map(fileToJSON));
+      const notesPayload = [...notes];
+      if (draft) notesPayload.push(draft);
+
+      const res = await fetch("/.netlify/functions/summarize", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ files: filePayload, notes: notesPayload }),
+      });
+
+      const text = await res.text();
+      let data = {};
+      try { data = JSON.parse(text); } catch {}
+
+      if (!res.ok) {
+        throw new Error(data?.error || `Summarize failed (${res.status})`);
+      }
+
+      const bullets = (data.summary || "")
+        .split("\n")
+        .map((s) => s.replace(/^[-•\s]+/, "").trim())
+        .filter(Boolean);
 
       if (mode === "combined") {
-        // One request with everything
-        const bullets = await summarizeJSON({ filesJson, notesArr });
         setCombinedBullets(bullets);
         setResults([]);
       } else {
-        // Per-file: loop and send one request per item to the SAME JSON endpoint
-        // Files first
-        const perItem = [];
-        for (const f of filesJson) {
-          const bullets = await summarizeJSON({ filesJson: [f], notesArr: [] });
-          perItem.push({ name: f.name || "file", bullets });
-        }
-        // Notes as individual items
-        for (let i = 0; i < notesArr.length; i++) {
-          const n = notesArr[i];
-          const bullets = await summarizeJSON({ filesJson: [], notesArr: [n] });
-          perItem.push({ name: `Note ${i + 1}`, bullets });
-        }
-        setResults(perItem);
+        setResults([{ name: "Combined", bullets }]);
         setCombinedBullets([]);
       }
+
+      // persist minimal context for Phase 3 (no file contents)
+      const payload = {
+        mode,
+        combinedBullets: mode === "combined" ? bullets : [],
+        results: mode === "per-file" ? [{ name: "Combined", bullets }] : [],
+        sourceFiles: files.map(f => ({ name: f.name, type: f.type || "", size: f.size || 0 })),
+        noteCount: notesPayload.length,
+        savedAt: new Date().toISOString(),
+      };
+      localStorage.setItem("phase3_seed_summary", JSON.stringify(payload));
     } catch (e) {
       console.error(e);
       setError(e.message || "Something went wrong.");
@@ -123,15 +103,13 @@ export default function Phase2Gather() {
     }
   };
 
-  // ---------- Export helpers ----------
+  // Helpers for actions
   const buildTextForExport = () => {
-    if (mode === "combined") {
-      // Heading line + bullets (no bullet for the heading)
-      return `Key Points from Your Material\n${combinedBullets.map((b) => `• ${b}`).join("\n")}`;
-    }
-    return results
-      .map((r) => [`# ${r.name}`, ...r.bullets.map((b) => `• ${b}`)].join("\n"))
-      .join("\n\n");
+    return mode === "combined"
+      ? ["Key Points from Your Material:", ...combinedBullets.map((b) => `• ${b}`)].join("\n")
+      : results
+          .map((r) => [`# ${r.name}`, ...r.bullets.map((b) => `• ${b}`)].join("\n"))
+          .join("\n\n");
   };
 
   const handleCopy = () => {
@@ -149,27 +127,23 @@ export default function Phase2Gather() {
   };
 
   const handleInsertIntoDraft = () => {
-  const payload = {
-    mode,
-    combinedBullets,
-    results,
-    savedAt: new Date().toISOString(),
-    sourceFiles: files.map(f => ({
-      name: f.name,
-      type: f.type || "unknown",
-      size: f.size || 0
-    })),
-    noteCount: notes.length
+    const payload = {
+      mode,
+      combinedBullets,
+      results,
+      sourceFiles: files.map(f => ({ name: f.name, type: f.type || "", size: f.size || 0 })),
+      noteCount: notes.length + (noteDraft.trim() ? 1 : 0),
+      savedAt: new Date().toISOString(),
+    };
+    localStorage.setItem("phase3_seed_summary", JSON.stringify(payload));
+    alert("Saved for Phase 3.");
   };
-  localStorage.setItem("phase3_seed_summary", JSON.stringify(payload));
-  alert("Saved for Phase 3.");
-};
 
-  // ---------- UI ----------
   return (
     <div className="flex h-screen bg-white">
       {/* Left Panel – Upload and Notes */}
       <div className="w-1/2 p-6 border-r overflow-y-auto">
+        <h1 className="text-2xl font-bold mb-2">Phase 2 – Gather Material</h1>
         <h2 className="text-xl font-semibold mb-4">📥 Add Your Material</h2>
 
         {/* Upload */}
@@ -182,81 +156,54 @@ export default function Phase2Gather() {
             onChange={handleFileChange}
             className="border p-2 rounded w-full"
           />
-          {files.length > 0 && (
-            <>
-              <ul className="mt-2 text-sm text-gray-700 space-y-2">
-                {files.map((file, idx) => (
-                  <li
-                    key={idx}
-                    className="flex items-center justify-between border rounded px-2 py-1"
-                  >
-                    <span className="truncate">{file.name}</span>
-                    <button
-                      className="ml-3 text-xs px-2 py-0.5 rounded bg-gray-200 hover:bg-gray-300"
-                      onClick={() => removeFileAt(idx)}
-                      title="Remove file"
-                    >
-                      ×
-                    </button>
-                  </li>
-                ))}
-              </ul>
-              <button
-                className="mt-2 text-xs px-2 py-1 border rounded"
-                onClick={clearFiles}
-              >
-                Clear files
-              </button>
-            </>
-          )}
+          <ul className="mt-2 text-sm text-gray-600 space-y-2">
+            {files.map((file, idx) => (
+              <li key={idx} className="border rounded p-2">
+                {file.name}
+              </li>
+            ))}
+          </ul>
         </div>
 
-{/* Notes */}
-<div className="mb-4">
-  <label className="block font-medium mb-2">
-    Paste notes or text:
-    <span className="block text-sm text-gray-500 font-normal">
-      Add facts, excerpts, or fragments not covered in your uploaded files. 
-      One main idea per line works best. This content will be summarized alongside your files in the next phase.
-    </span>
-  </label>
-  <textarea
-    placeholder="Paste copied text or write here..."
-    rows={6}
-    className="border p-2 rounded w-full"
-    value={noteDraft}
-    onChange={(e) => setNoteDraft(e.target.value)}
-  />
-  <div className="mt-2 flex items-center gap-2">
-    <button
-      className="px-3 py-1 text-sm border rounded"
-      onClick={addNote}
-      disabled={!noteDraft.trim()}
-    >
-      Add note
-    </button>
-    {notes.length > 0 && (
-      <>
-        <span className="text-sm text-gray-600">
-          {notes.length} saved note{notes.length > 1 ? "s" : ""}
-        </span>
-        <button
-          className="px-2 py-1 text-xs border rounded text-gray-600 hover:text-red-600"
-          onClick={() => setNotes([])}
-        >
-          Clear notes
-        </button>
-      </>
-    )}
-  </div>
-  {notes.length > 0 && (
-    <ul className="mt-2 text-sm text-gray-600 list-disc pl-5">
-      {notes.map((_, idx) => (
-        <li key={idx}>Note #{idx + 1}</li>
-      ))}
-    </ul>
-  )}
-</div>
+        {/* Notes */}
+        <div className="mb-4">
+          <label className="block font-medium mb-1">
+            Paste notes or text:
+          </label>
+          <p className="text-xs text-gray-500 mb-2">
+            Use this for key excerpts, quotes, stats, or your own takeaways you want summarized
+            with your files. (Your Phase 1 info—goals, audience, and voice—will be used later in
+            drafting. No need to repeat it here.)
+          </p>
+          <textarea
+            placeholder="Paste copied text or write here..."
+            rows={6}
+            className="border p-2 rounded w-full"
+            value={noteDraft}
+            onChange={(e) => setNoteDraft(e.target.value)}
+          />
+          <div className="mt-2 flex items-center gap-2">
+            <button
+              className="px-3 py-1 text-sm border rounded"
+              onClick={addNote}
+              disabled={!noteDraft.trim()}
+            >
+              Add note
+            </button>
+            {notes.length > 0 && (
+              <span className="text-sm text-gray-600">
+                {notes.length} saved note{notes.length > 1 ? "s" : ""}
+              </span>
+            )}
+          </div>
+          {notes.length > 0 && (
+            <ul className="mt-2 text-sm text-gray-600 list-disc pl-5">
+              {notes.map((_, idx) => (
+                <li key={idx}>Note #{idx + 1}</li>
+              ))}
+            </ul>
+          )}
+        </div>
 
         {/* View toggle + Summarize */}
         <div className="mt-6 flex items-center gap-4">
@@ -314,14 +261,13 @@ export default function Phase2Gather() {
               Download .txt
             </button>
             <button className="px-3 py-1 text-sm border rounded" onClick={handleInsertIntoDraft}>
-              Insert into Draft
+              Save Summary for Phase 3
             </button>
           </div>
         )}
 
         {isSummarizing && <div className="text-sm text-gray-600 mb-3">Summarizing…</div>}
 
-        {/* Combined view */}
         {!isSummarizing && mode === "combined" && combinedBullets.length > 0 && (
           <div className="bg-gray-50 border rounded p-4">
             <h4 className="font-medium mb-2">Key Points from Your Material</h4>
@@ -333,7 +279,6 @@ export default function Phase2Gather() {
           </div>
         )}
 
-        {/* Per-file view */}
         {!isSummarizing && mode === "per-file" && results.length > 0 && (
           <div className="space-y-4">
             {results.map((r, idx) => (
@@ -348,6 +293,16 @@ export default function Phase2Gather() {
             ))}
           </div>
         )}
+
+        {/* Dummy navigation to Phase 3 */}
+        <div className="mt-6">
+          <button
+            className="px-4 py-2 bg-gray-800 text-white rounded hover:bg-gray-900"
+            onClick={() => alert("Phase 3 navigation will go here")}
+          >
+            Continue to Phase 3
+          </button>
+        </div>
       </div>
     </div>
   );
