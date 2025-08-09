@@ -13,6 +13,13 @@ export default function Phase2Gather() {
   const [isSummarizing, setIsSummarizing] = useState(false);
   const [error, setError] = useState("");
 
+  // ---------- NEW: small helpers to remove/clear ----------
+  const removeFile = (i) => setFiles((prev) => prev.filter((_, idx) => idx !== i));
+  const clearFiles = () => setFiles([]);
+
+  const removeNote = (i) => setNotes((prev) => prev.filter((_, idx) => idx !== i));
+  const clearNotes = () => setNotes([]);
+
   const handleFileChange = (e) => {
     const newFiles = Array.from(e.target.files || []);
     setFiles((prev) => [...prev, ...newFiles]);
@@ -39,7 +46,7 @@ export default function Phase2Gather() {
       reader.readAsDataURL(file);
     });
 
-  // Send everything as JSON (no multipart)
+  // Send everything as JSON (no multipart) — unchanged
   const summarizeAll = async () => {
     setError("");
     setIsSummarizing(true);
@@ -125,6 +132,7 @@ export default function Phase2Gather() {
     localStorage.setItem("phase3_seed_summary", JSON.stringify(payload));
     alert("Saved for Phase 3.");
   };
+
   return (
     <div className="flex h-screen bg-white">
       {/* Left Panel – Upload and Notes */}
@@ -143,11 +151,31 @@ export default function Phase2Gather() {
           />
           <ul className="mt-2 text-sm text-gray-600 space-y-2">
             {files.map((file, idx) => (
-              <li key={idx} className="border rounded p-2">
-                {file.name}
+              <li key={idx} className="border rounded p-2 flex items-center justify-between">
+                <span className="truncate">{file.name}</span>
+                <button
+                  type="button"
+                  className="ml-3 px-2 py-0.5 text-xs rounded bg-gray-200 hover:bg-gray-300"
+                  onClick={() => removeFile(idx)}
+                  aria-label={`Remove ${file.name}`}
+                  title="Remove file"
+                >
+                  ✕
+                </button>
               </li>
             ))}
           </ul>
+          {files.length > 0 && (
+            <div className="mt-2">
+              <button
+                type="button"
+                className="px-3 py-1 text-sm border rounded"
+                onClick={clearFiles}
+              >
+                Clear files
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Notes */}
@@ -169,15 +197,44 @@ export default function Phase2Gather() {
               Add note
             </button>
             {notes.length > 0 && (
-              <span className="text-sm text-gray-600">
-                {notes.length} saved note{notes.length > 1 ? "s" : ""}
-              </span>
+              <>
+                <span className="text-sm text-gray-600">
+                  {notes.length} saved note{notes.length > 1 ? "s" : ""}
+                </span>
+                <button
+                  type="button"
+                  className="ml-auto px-3 py-1 text-sm border rounded"
+                  onClick={clearNotes}
+                >
+                  Clear notes
+                </button>
+              </>
             )}
           </div>
+
           {notes.length > 0 && (
-            <ul className="mt-2 text-sm text-gray-600 list-disc pl-5">
-              {notes.map((_, idx) => (
-                <li key={idx}>Note #{idx + 1}</li>
+            <ul className="mt-2 text-sm text-gray-700 space-y-2">
+              {notes.map((note, idx) => (
+                <li
+                  key={idx}
+                  className="border rounded p-2 flex items-start justify-between gap-3"
+                >
+                  <span className="flex-1">
+                    <span className="font-medium">Note #{idx + 1}: </span>
+                    <span className="text-gray-600">
+                      {note.length > 80 ? note.slice(0, 80) + "…" : note}
+                    </span>
+                  </span>
+                  <button
+                    type="button"
+                    className="px-2 py-0.5 text-xs rounded bg-gray-200 hover:bg-gray-300"
+                    onClick={() => removeNote(idx)}
+                    aria-label={`Remove note ${idx + 1}`}
+                    title="Remove note"
+                  >
+                    ✕
+                  </button>
+                </li>
               ))}
             </ul>
           )}
