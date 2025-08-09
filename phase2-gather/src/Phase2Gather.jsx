@@ -25,6 +25,9 @@ export default function Phase2Gather() {
     setNoteDraft("");
   };
 
+  const clearFiles = () => setFiles([]);
+  const clearNotes = () => setNotes([]);
+
   // Helper: read a File -> { name, type, base64 }
   const fileToJSON = (file) =>
     new Promise((resolve, reject) => {
@@ -32,14 +35,12 @@ export default function Phase2Gather() {
       reader.onerror = (e) => reject(e);
       reader.onload = () => {
         const result = reader.result || "";
-        // result is data:...;base64,XXXX
         const base64 = String(result).split(",")[1] || "";
-        resolve({ name: file.name, type: file.type || "", base64 });
+        resolve({ name: file.name, type: file.type || "", size: file.size, base64 });
       };
       reader.readAsDataURL(file);
     });
 
-  // Send everything as JSON (no multipart)
   const summarizeAll = async () => {
     setError("");
     setIsSummarizing(true);
@@ -84,17 +85,6 @@ export default function Phase2Gather() {
         setResults([{ name: "Combined", bullets }]);
         setCombinedBullets([]);
       }
-
-      // persist minimal context for Phase 3 (no file contents)
-      const payload = {
-        mode,
-        combinedBullets: mode === "combined" ? bullets : [],
-        results: mode === "per-file" ? [{ name: "Combined", bullets }] : [],
-        sourceFiles: files.map(f => ({ name: f.name, type: f.type || "", size: f.size || 0 })),
-        noteCount: notesPayload.length,
-        savedAt: new Date().toISOString(),
-      };
-      localStorage.setItem("phase3_seed_summary", JSON.stringify(payload));
     } catch (e) {
       console.error(e);
       setError(e.message || "Something went wrong.");
@@ -103,10 +93,9 @@ export default function Phase2Gather() {
     }
   };
 
-  // Helpers for actions
   const buildTextForExport = () => {
     return mode === "combined"
-      ? ["Key Points from Your Material:", ...combinedBullets.map((b) => `• ${b}`)].join("\n")
+      ? ["Key Points from Your Material", ...combinedBullets.map((b) => `• ${b}`)].join("\n")
       : results
           .map((r) => [`# ${r.name}`, ...r.bullets.map((b) => `• ${b}`)].join("\n"))
           .join("\n\n");
@@ -131,9 +120,9 @@ export default function Phase2Gather() {
       mode,
       combinedBullets,
       results,
-      sourceFiles: files.map(f => ({ name: f.name, type: f.type || "", size: f.size || 0 })),
-      noteCount: notes.length + (noteDraft.trim() ? 1 : 0),
       savedAt: new Date().toISOString(),
+      sourceFiles: files.map(f => ({ name: f.name, type: f.type, size: f.size })),
+      noteCount: notes.length
     };
     localStorage.setItem("phase3_seed_summary", JSON.stringify(payload));
     alert("Saved for Phase 3.");
@@ -143,8 +132,7 @@ export default function Phase2Gather() {
     <div className="flex h-screen bg-white">
       {/* Left Panel – Upload and Notes */}
       <div className="w-1/2 p-6 border-r overflow-y-auto">
-        <h1 className="text-2xl font-bold mb-2">Phase 2 – Gather Material</h1>
-        <h2 className="text-xl font-semibold mb-4">📥 Add Your Material</h2>
+        <h2 className="text-xl font-semibold mb-4">📄 Phase 2 – Gather Material</h2>
 
         {/* Upload */}
         <div className="mb-6">
@@ -156,24 +144,37 @@ export default function Phase2Gather() {
             onChange={handleFileChange}
             className="border p-2 rounded w-full"
           />
-          <ul className="mt-2 text-sm text-gray-600 space-y-2">
-            {files.map((file, idx) => (
-              <li key={idx} className="border rounded p-2">
-                {file.name}
-              </li>
-            ))}
-          </ul>
+          {files.length > 0 && (
+            <div className="mt-2">
+              <ul className="text-sm text-gray-600 space-y-1">
+                {files.map((file, idx) => (
+                  <li key={idx} className="flex justify-between items-center border rounded px-2 py-1">
+                    <span>{file.name}</span>
+                    <button
+                      onClick={() => setFiles(prev => prev.filter((_, i) => i !== idx))}
+                      className="text-red-500 hover:text-red-700 ml-2"
+                    >
+                      ✕
+                    </button>
+                  </li>
+                ))}
+              </ul>
+              <button
+                className="mt-2 text-xs text-gray-500 hover:underline"
+                onClick={clearFiles}
+              >
+                Clear all files
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Notes */}
         <div className="mb-4">
-          <label className="block font-medium mb-1">
-            Paste notes or text:
-          </label>
-          <p className="text-xs text-gray-500 mb-2">
-            Use this for key excerpts, quotes, stats, or your own takeaways you want summarized
-            with your files. (Your Phase 1 info—goals, audience, and voice—will be used later in
-            drafting. No need to repeat it here.)
+          <label className="block font-medium mb-1">Paste notes or text:</label>
+          <p className="text-xs text-gray-500 mb-1">
+            Add excerpts, observations, or background info relevant to your draft.  
+            Phase 1 already captured goals, audience, and tone — here, focus on raw material.
           </p>
           <textarea
             placeholder="Paste copied text or write here..."
@@ -191,9 +192,17 @@ export default function Phase2Gather() {
               Add note
             </button>
             {notes.length > 0 && (
-              <span className="text-sm text-gray-600">
-                {notes.length} saved note{notes.length > 1 ? "s" : ""}
-              </span>
+              <>
+                <span className="text-sm text-gray-600">
+                  {notes.length} saved note{notes.length > 1 ? "s" : ""}
+                </span>
+                <button
+                  className="text-xs text-gray-500 hover:underline ml-2"
+                  onClick={clearNotes}
+                >
+                  Clear notes
+                </button>
+              </>
             )}
           </div>
           {notes.length > 0 && (
@@ -226,7 +235,7 @@ export default function Phase2Gather() {
                 checked={mode === "per-file"}
                 onChange={() => setMode("per-file")}
               />
-              Per‑file
+              Per-file
             </label>
           </div>
 
@@ -263,6 +272,12 @@ export default function Phase2Gather() {
             <button className="px-3 py-1 text-sm border rounded" onClick={handleInsertIntoDraft}>
               Save Summary for Phase 3
             </button>
+            <a
+              href="#"
+              className="ml-4 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+            >
+              Continue to Phase 3
+            </a>
           </div>
         )}
 
@@ -293,16 +308,6 @@ export default function Phase2Gather() {
             ))}
           </div>
         )}
-
-        {/* Dummy navigation to Phase 3 */}
-        <div className="mt-6">
-          <button
-            className="px-4 py-2 bg-gray-800 text-white rounded hover:bg-gray-900"
-            onClick={() => alert("Phase 3 navigation will go here")}
-          >
-            Continue to Phase 3
-          </button>
-        </div>
       </div>
     </div>
   );
