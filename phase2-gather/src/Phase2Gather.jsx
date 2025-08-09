@@ -9,16 +9,9 @@ export default function Phase2Gather() {
   // Output + UI state
   const [results, setResults] = useState([]);        // [{ name, bullets: [] }]
   const [combinedBullets, setCombinedBullets] = useState([]);
-  const [mode, setMode] = useState("combined");      // 'combined' | 'per-file' (combined result labeled)
+  const [mode, setMode] = useState("combined");      // 'combined' | 'per-file'
   const [isSummarizing, setIsSummarizing] = useState(false);
   const [error, setError] = useState("");
-
-  // ---------- NEW: small helpers to remove/clear ----------
-  const removeFile = (i) => setFiles((prev) => prev.filter((_, idx) => idx !== i));
-  const clearFiles = () => setFiles([]);
-
-  const removeNote = (i) => setNotes((prev) => prev.filter((_, idx) => idx !== i));
-  const clearNotes = () => setNotes([]);
 
   const handleFileChange = (e) => {
     const newFiles = Array.from(e.target.files || []);
@@ -39,14 +32,35 @@ export default function Phase2Gather() {
       reader.onerror = (e) => reject(e);
       reader.onload = () => {
         const result = reader.result || "";
-        // result is data:...;base64,XXXX
         const base64 = String(result).split(",")[1] || "";
         resolve({ name: file.name, type: file.type || "", base64 });
       };
       reader.readAsDataURL(file);
     });
 
-  // Send everything as JSON (no multipart) — unchanged
+  // Helper: POST to function and return bullets
+  async function summarizePayload(payload) {
+    const res = await fetch("/.netlify/functions/summarize", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+
+    const text = await res.text();
+    let data = {};
+    try { data = JSON.parse(text); } catch {}
+
+    if (!res.ok) {
+      throw new Error(data?.error || `Summarize failed (${res.status})`);
+    }
+
+    return (data.summary || "")
+      .split("\n")
+      .map((s) => s.replace(/^[-•\s]+/, "").trim())
+      .filter(Boolean);
+  }
+
+  // Send everything as JSON (combined or per-file)
   const summarizeAll = async () => {
     setError("");
     setIsSummarizing(true);
@@ -55,40 +69,40 @@ export default function Phase2Gather() {
 
     try {
       const draft = noteDraft.trim();
-      if (files.length === 0 && notes.length === 0 && !draft) {
+      const hasNotes = notes.length > 0 || !!draft;
+      const notesMerged = hasNotes ? [...notes, ...(draft ? [draft] : [])].join("\n\n") : "";
+
+      if (files.length === 0 && !hasNotes) {
         setError("Please add at least one file or some notes.");
         setIsSummarizing(false);
         return;
       }
 
-      const filePayload = await Promise.all(files.map(fileToJSON));
-      const notesPayload = [...notes];
-      if (draft) notesPayload.push(draft);
-
-      const res = await fetch("/.netlify/functions/summarize", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ files: filePayload, notes: notesPayload }),
-      });
-
-      const text = await res.text();
-      let data = {};
-      try { data = JSON.parse(text); } catch {}
-
-      if (!res.ok) {
-        throw new Error(data?.error || `Summarize failed (${res.status})`);
-      }
-
-      const bullets = (data.summary || "")
-        .split("\n")
-        .map((s) => s.replace(/^[-•\s]+/, "").trim())
-        .filter(Boolean);
-
       if (mode === "combined") {
+        // one request with all files + all notes
+        const filePayload = await Promise.all(files.map(fileToJSON));
+        const notesPayload = hasNotes ? [notesMerged] : [];
+        const bullets = await summarizePayload({ files: filePayload, notes: notesPayload });
         setCombinedBullets(bullets);
         setResults([]);
       } else {
-        setResults([{ name: "Combined", bullets }]);
+        // per-file: one request per file, plus one for merged notes (if any)
+        const items = [];
+
+        // files first
+        for (const f of files) {
+          const oneFile = await fileToJSON(f);
+          const bullets = await summarizePayload({ files: [oneFile], notes: [] });
+          items.push({ name: f.name, bullets });
+        }
+
+        // then notes as a separate item
+        if (hasNotes) {
+          const bullets = await summarizePayload({ files: [], notes: [notesMerged] });
+          items.push({ name: "Notes", bullets });
+        }
+
+        setResults(items);
         setCombinedBullets([]);
       }
     } catch (e) {
@@ -151,31 +165,11 @@ export default function Phase2Gather() {
           />
           <ul className="mt-2 text-sm text-gray-600 space-y-2">
             {files.map((file, idx) => (
-              <li key={idx} className="border rounded p-2 flex items-center justify-between">
-                <span className="truncate">{file.name}</span>
-                <button
-                  type="button"
-                  className="ml-3 px-2 py-0.5 text-xs rounded bg-gray-200 hover:bg-gray-300"
-                  onClick={() => removeFile(idx)}
-                  aria-label={`Remove ${file.name}`}
-                  title="Remove file"
-                >
-                  ✕
-                </button>
+              <li key={idx} className="border rounded p-2">
+                {file.name}
               </li>
             ))}
           </ul>
-          {files.length > 0 && (
-            <div className="mt-2">
-              <button
-                type="button"
-                className="px-3 py-1 text-sm border rounded"
-                onClick={clearFiles}
-              >
-                Clear files
-              </button>
-            </div>
-          )}
         </div>
 
         {/* Notes */}
@@ -197,44 +191,15 @@ export default function Phase2Gather() {
               Add note
             </button>
             {notes.length > 0 && (
-              <>
-                <span className="text-sm text-gray-600">
-                  {notes.length} saved note{notes.length > 1 ? "s" : ""}
-                </span>
-                <button
-                  type="button"
-                  className="ml-auto px-3 py-1 text-sm border rounded"
-                  onClick={clearNotes}
-                >
-                  Clear notes
-                </button>
-              </>
+              <span className="text-sm text-gray-600">
+                {notes.length} saved note{notes.length > 1 ? "s" : ""}
+              </span>
             )}
           </div>
-
           {notes.length > 0 && (
-            <ul className="mt-2 text-sm text-gray-700 space-y-2">
-              {notes.map((note, idx) => (
-                <li
-                  key={idx}
-                  className="border rounded p-2 flex items-start justify-between gap-3"
-                >
-                  <span className="flex-1">
-                    <span className="font-medium">Note #{idx + 1}: </span>
-                    <span className="text-gray-600">
-                      {note.length > 80 ? note.slice(0, 80) + "…" : note}
-                    </span>
-                  </span>
-                  <button
-                    type="button"
-                    className="px-2 py-0.5 text-xs rounded bg-gray-200 hover:bg-gray-300"
-                    onClick={() => removeNote(idx)}
-                    aria-label={`Remove note ${idx + 1}`}
-                    title="Remove note"
-                  >
-                    ✕
-                  </button>
-                </li>
+            <ul className="mt-2 text-sm text-gray-600 list-disc pl-5">
+              {notes.map((_, idx) => (
+                <li key={idx}>Note #{idx + 1}</li>
               ))}
             </ul>
           )}
