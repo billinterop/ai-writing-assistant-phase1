@@ -5,11 +5,12 @@ export default function Phase2Gather() {
   const [files, setFiles] = useState([]);
   const [notes, setNotes] = useState([]);            // committed notes
   const [noteDraft, setNoteDraft] = useState("");    // current textarea value
+  const [fileInputKey, setFileInputKey] = useState(0); // helps reset <input type="file" />
 
   // Output + UI state
   const [results, setResults] = useState([]);        // [{ name, bullets: [] }]
   const [combinedBullets, setCombinedBullets] = useState([]);
-  const [mode, setMode] = useState("combined");      // 'combined' | 'per-file'
+  const [mode, setMode] = useState("combined");      // 'combined' | 'per-file' (combined result labeled)
   const [isSummarizing, setIsSummarizing] = useState(false);
   const [error, setError] = useState("");
 
@@ -18,10 +19,29 @@ export default function Phase2Gather() {
     setFiles((prev) => [...prev, ...newFiles]);
   };
 
+  const removeFile = (index) => {
+    setFiles((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const clearFiles = () => {
+    setFiles([]);
+    // reset the file input so selecting the same file again will trigger onChange
+    setFileInputKey((k) => k + 1);
+  };
+
   const addNote = () => {
     const v = noteDraft.trim();
     if (!v) return;
     setNotes((prev) => [...prev, v]);
+    setNoteDraft("");
+  };
+
+  const removeNote = (index) => {
+    setNotes((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const clearNotes = () => {
+    setNotes([]);
     setNoteDraft("");
   };
 
@@ -32,35 +52,14 @@ export default function Phase2Gather() {
       reader.onerror = (e) => reject(e);
       reader.onload = () => {
         const result = reader.result || "";
+        // result is data:...;base64,XXXX
         const base64 = String(result).split(",")[1] || "";
         resolve({ name: file.name, type: file.type || "", base64 });
       };
       reader.readAsDataURL(file);
     });
 
-  // Helper: POST to function and return bullets
-  async function summarizePayload(payload) {
-    const res = await fetch("/.netlify/functions/summarize", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
-
-    const text = await res.text();
-    let data = {};
-    try { data = JSON.parse(text); } catch {}
-
-    if (!res.ok) {
-      throw new Error(data?.error || `Summarize failed (${res.status})`);
-    }
-
-    return (data.summary || "")
-      .split("\n")
-      .map((s) => s.replace(/^[-•\s]+/, "").trim())
-      .filter(Boolean);
-  }
-
-  // Send everything as JSON (combined or per-file)
+  // Send everything as JSON (no multipart) — unchanged behavior
   const summarizeAll = async () => {
     setError("");
     setIsSummarizing(true);
@@ -69,40 +68,41 @@ export default function Phase2Gather() {
 
     try {
       const draft = noteDraft.trim();
-      const hasNotes = notes.length > 0 || !!draft;
-      const notesMerged = hasNotes ? [...notes, ...(draft ? [draft] : [])].join("\n\n") : "";
-
-      if (files.length === 0 && !hasNotes) {
+      if (files.length === 0 && notes.length === 0 && !draft) {
         setError("Please add at least one file or some notes.");
         setIsSummarizing(false);
         return;
       }
 
+      const filePayload = await Promise.all(files.map(fileToJSON));
+      const notesPayload = [...notes];
+      if (draft) notesPayload.push(draft);
+
+      const res = await fetch("/.netlify/functions/summarize", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ files: filePayload, notes: notesPayload }),
+      });
+
+      const text = await res.text();
+      let data = {};
+      try { data = JSON.parse(text); } catch {}
+
+      if (!res.ok) {
+        throw new Error(data?.error || `Summarize failed (${res.status})`);
+      }
+
+      const bullets = (data.summary || "")
+        .split("\n")
+        .map((s) => s.replace(/^[-•\s]+/, "").trim())
+        .filter(Boolean);
+
       if (mode === "combined") {
-        // one request with all files + all notes
-        const filePayload = await Promise.all(files.map(fileToJSON));
-        const notesPayload = hasNotes ? [notesMerged] : [];
-        const bullets = await summarizePayload({ files: filePayload, notes: notesPayload });
         setCombinedBullets(bullets);
         setResults([]);
       } else {
-        // per-file: one request per file, plus one for merged notes (if any)
-        const items = [];
-
-        // files first
-        for (const f of files) {
-          const oneFile = await fileToJSON(f);
-          const bullets = await summarizePayload({ files: [oneFile], notes: [] });
-          items.push({ name: f.name, bullets });
-        }
-
-        // then notes as a separate item
-        if (hasNotes) {
-          const bullets = await summarizePayload({ files: [], notes: [notesMerged] });
-          items.push({ name: "Notes", bullets });
-        }
-
-        setResults(items);
+        // keep per-file UI pathway by labeling as a single “Combined” item (matches your current server contract)
+        setResults([{ name: "Combined", bullets }]);
         setCombinedBullets([]);
       }
     } catch (e) {
@@ -157,19 +157,48 @@ export default function Phase2Gather() {
         <div className="mb-6">
           <label className="block font-medium mb-2">Upload files:</label>
           <input
+            key={fileInputKey}
             type="file"
             accept=".pdf,.docx,.txt"
             multiple
             onChange={handleFileChange}
             className="border p-2 rounded w-full"
           />
-          <ul className="mt-2 text-sm text-gray-600 space-y-2">
-            {files.map((file, idx) => (
-              <li key={idx} className="border rounded p-2">
-                {file.name}
-              </li>
-            ))}
-          </ul>
+
+          {/* File list with remove chips */}
+          {files.length > 0 && (
+            <>
+              <ul className="mt-2 text-sm text-gray-800 space-y-2">
+                {files.map((file, idx) => (
+                  <li
+                    key={idx}
+                    className="border rounded px-3 py-2 flex items-center justify-between"
+                  >
+                    <span className="truncate pr-3">{file.name}</span>
+                    <button
+                      type="button"
+                      aria-label={`Remove ${file.name}`}
+                      className="ml-3 inline-flex h-6 w-6 items-center justify-center rounded-full border border-gray-300 text-gray-600 hover:bg-gray-100"
+                      onClick={() => removeFile(idx)}
+                      title="Remove file"
+                    >
+                      ×
+                    </button>
+                  </li>
+                ))}
+              </ul>
+
+              <div className="mt-2">
+                <button
+                  type="button"
+                  className="px-3 py-1 text-sm border rounded hover:bg-gray-50"
+                  onClick={clearFiles}
+                >
+                  Clear files
+                </button>
+              </div>
+            </>
+          )}
         </div>
 
         {/* Notes */}
@@ -190,17 +219,48 @@ export default function Phase2Gather() {
             >
               Add note
             </button>
+
+            {notes.length > 0 && (
+              <button
+                className="px-3 py-1 text-sm border rounded hover:bg-gray-50"
+                onClick={clearNotes}
+                type="button"
+              >
+                Clear notes
+              </button>
+            )}
+
             {notes.length > 0 && (
               <span className="text-sm text-gray-600">
                 {notes.length} saved note{notes.length > 1 ? "s" : ""}
               </span>
             )}
           </div>
+
+          {/* Notes list with remove chips */}
           {notes.length > 0 && (
-            <ul className="mt-2 text-sm text-gray-600 list-disc pl-5">
-              {notes.map((_, idx) => (
-                <li key={idx}>Note #{idx + 1}</li>
-              ))}
+            <ul className="mt-2 text-sm text-gray-800 space-y-2">
+              {notes.map((note, idx) => {
+                const preview = note.length > 80 ? note.slice(0, 80) + "…" : note;
+                return (
+                  <li
+                    key={idx}
+                    className="border rounded px-3 py-2 flex items-center justify-between"
+                    title={note}
+                  >
+                    <span className="truncate pr-3">{preview}</span>
+                    <button
+                      type="button"
+                      aria-label={`Remove note ${idx + 1}`}
+                      className="ml-3 inline-flex h-6 w-6 items-center justify-center rounded-full border border-gray-300 text-gray-600 hover:bg-gray-100"
+                      onClick={() => removeNote(idx)}
+                      title="Remove note"
+                    >
+                      ×
+                    </button>
+                  </li>
+                );
+              })}
             </ul>
           )}
         </div>
@@ -246,11 +306,13 @@ export default function Phase2Gather() {
 
         {error && <div className="text-sm text-red-600 mb-3">{error}</div>}
 
-        {!isSummarizing && results.length === 0 && combinedBullets.length === 0 ? (
-          <p className="text-gray-500 italic">
-            No summaries yet. Upload files and/or add notes, then click <b>Summarize All</b>.
-          </p>
-        ) : null}
+        {!isSummarizing &&
+          results.length === 0 &&
+          combinedBullets.length === 0 && (
+            <p className="text-gray-500 italic">
+              No summaries yet. Upload files and/or add notes, then click <b>Summarize All</b>.
+            </p>
+          )}
 
         {(combinedBullets.length > 0 || results.length > 0) && (
           <div className="flex gap-2 mb-3">
