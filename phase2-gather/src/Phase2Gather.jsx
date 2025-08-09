@@ -9,26 +9,27 @@ export default function Phase2Gather() {
   // Output + UI state
   const [results, setResults] = useState([]);        // [{ name, bullets: [] }]
   const [combinedBullets, setCombinedBullets] = useState([]);
-  const [mode, setMode] = useState("combined");      // 'combined' | 'per-file' (combined result labeled)
+  const [mode, setMode] = useState("combined");      // 'combined' | 'per-file'
   const [isSummarizing, setIsSummarizing] = useState(false);
   const [error, setError] = useState("");
 
+  // Uploads
   const handleFileChange = (e) => {
     const newFiles = Array.from(e.target.files || []);
     setFiles((prev) => [...prev, ...newFiles]);
   };
+  const clearFiles = () => setFiles([]);
 
+  // Notes
   const addNote = () => {
     const v = noteDraft.trim();
     if (!v) return;
     setNotes((prev) => [...prev, v]);
     setNoteDraft("");
   };
-
-  const clearFiles = () => setFiles([]);
   const clearNotes = () => setNotes([]);
 
-  // Helper: read a File -> { name, type, size, base64 }
+  // File -> JSON (name, type, size, base64)
   const fileToJSON = (file) =>
     new Promise((resolve, reject) => {
       const reader = new FileReader();
@@ -41,6 +42,14 @@ export default function Phase2Gather() {
       reader.readAsDataURL(file);
     });
 
+  // Parse bullets from model text
+  const toBullets = (text) =>
+    (text || "")
+      .split("\n")
+      .map((s) => s.replace(/^[-•\s]+/, "").trim())
+      .filter(Boolean);
+
+  // Summarize (combined or per-file)
   const summarizeAll = async () => {
     setError("");
     setIsSummarizing(true);
@@ -49,40 +58,66 @@ export default function Phase2Gather() {
 
     try {
       const draft = noteDraft.trim();
-      if (files.length === 0 && notes.length === 0 && !draft) {
+      const notesPayload = [...notes, ...(draft ? [draft] : [])];
+
+      if (files.length === 0 && notesPayload.length === 0) {
         setError("Please add at least one file or some notes.");
-        setIsSummarizing(false);
         return;
       }
 
-      const filePayload = await Promise.all(files.map(fileToJSON));
-      const notesPayload = [...notes];
-      if (draft) notesPayload.push(draft);
-
-      const res = await fetch("/.netlify/functions/summarize", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ files: filePayload, notes: notesPayload }),
-      });
-
-      const text = await res.text();
-      let data = {};
-      try { data = JSON.parse(text); } catch {}
-
-      if (!res.ok) {
-        throw new Error(data?.error || `Summarize failed (${res.status})`);
-      }
-
-      const bullets = (data.summary || "")
-        .split("\n")
-        .map((s) => s.replace(/^[-•\s]+/, "").trim())
-        .filter(Boolean);
+      const filePayloads = await Promise.all(files.map(fileToJSON));
 
       if (mode === "combined") {
-        setCombinedBullets(bullets);
+        // One request with all files + all notes
+        const res = await fetch("/.netlify/functions/summarize", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ files: filePayloads, notes: notesPayload }),
+        });
+
+        const text = await res.text();
+        let data = {};
+        try { data = JSON.parse(text); } catch {}
+        if (!res.ok) throw new Error(data?.error || `Summarize failed (${res.status})`);
+
+        setCombinedBullets(toBullets(data.summary));
         setResults([]);
       } else {
-        setResults([{ name: "Combined", bullets }]);
+        // Per-file: send each file separately; send all notes as one “Notes” item (if present)
+        const per = [];
+
+        for (let i = 0; i < filePayloads.length; i++) {
+          const one = filePayloads[i];
+          const res = await fetch("/.netlify/functions/summarize", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ files: [one], notes: [] }),
+          });
+
+          const text = await res.text();
+          let data = {};
+          try { data = JSON.parse(text); } catch {}
+          if (!res.ok) throw new Error(data?.error || `Summarize failed (${res.status})`);
+
+          per.push({ name: one.name || `File ${i + 1}`, bullets: toBullets(data.summary) });
+        }
+
+        if (notesPayload.length > 0) {
+          const resNotes = await fetch("/.netlify/functions/summarize", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ files: [], notes: notesPayload }),
+          });
+
+          const textNotes = await resNotes.text();
+          let dataNotes = {};
+          try { dataNotes = JSON.parse(textNotes); } catch {}
+          if (!resNotes.ok) throw new Error(dataNotes?.error || `Summarize failed (${resNotes.status})`);
+
+          per.push({ name: "Notes", bullets: toBullets(dataNotes.summary) });
+        }
+
+        setResults(per);
         setCombinedBullets([]);
       }
     } catch (e) {
@@ -93,6 +128,7 @@ export default function Phase2Gather() {
     }
   };
 
+  // Export helpers
   const buildTextForExport = () => {
     return mode === "combined"
       ? ["Key Points from Your Material", ...combinedBullets.map((b) => `• ${b}`)].join("\n")
@@ -100,11 +136,7 @@ export default function Phase2Gather() {
           .map((r) => [`# ${r.name}`, ...r.bullets.map((b) => `• ${b}`)].join("\n"))
           .join("\n\n");
   };
-
-  const handleCopy = () => {
-    navigator.clipboard.writeText(buildTextForExport());
-  };
-
+  const handleCopy = () => navigator.clipboard.writeText(buildTextForExport());
   const handleDownload = () => {
     const blob = new Blob([buildTextForExport()], { type: "text/plain" });
     const url = URL.createObjectURL(blob);
@@ -114,7 +146,6 @@ export default function Phase2Gather() {
     a.click();
     URL.revokeObjectURL(url);
   };
-
   const handleInsertIntoDraft = () => {
     const payload = {
       mode,
@@ -122,7 +153,7 @@ export default function Phase2Gather() {
       results,
       savedAt: new Date().toISOString(),
       sourceFiles: files.map(f => ({ name: f.name, type: f.type, size: f.size })),
-      noteCount: notes.length
+      noteCount: notes.length + (noteDraft.trim() ? 1 : 0),
     };
     localStorage.setItem("phase3_seed_summary", JSON.stringify(payload));
     alert("Saved for Phase 3.");
@@ -262,7 +293,7 @@ export default function Phase2Gather() {
         ) : null}
 
         {(combinedBullets.length > 0 || results.length > 0) && (
-          <div className="flex flex-wrap items-center gap-2 mb-3">
+          <div className="flex items-center gap-2 mb-3 flex-wrap">
             <button className="px-3 py-1 text-sm border rounded" onClick={handleCopy}>
               Copy
             </button>
@@ -276,7 +307,7 @@ export default function Phase2Gather() {
               href="https://interopsystems.com"
               target="_blank"
               rel="noopener noreferrer"
-              className="ml-4 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+              className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
             >
               Continue to Phase 3
             </a>
