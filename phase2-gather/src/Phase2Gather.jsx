@@ -28,7 +28,7 @@ export default function Phase2Gather() {
   const clearFiles = () => setFiles([]);
   const clearNotes = () => setNotes([]);
 
-  // Helper: read a File -> { name, type, base64 }
+  // Helper: read a File -> { name, type, size, base64 }
   const fileToJSON = (file) =>
     new Promise((resolve, reject) => {
       const reader = new FileReader();
@@ -262,7 +262,7 @@ export default function Phase2Gather() {
         ) : null}
 
         {(combinedBullets.length > 0 || results.length > 0) && (
-          <div className="flex gap-2 mb-3">
+          <div className="flex flex-wrap items-center gap-2 mb-3">
             <button className="px-3 py-1 text-sm border rounded" onClick={handleCopy}>
               Copy
             </button>
@@ -273,7 +273,9 @@ export default function Phase2Gather() {
               Save Summary for Phase 3
             </button>
             <a
-              href="#"
+              href="https://interopsystems.com"
+              target="_blank"
+              rel="noopener noreferrer"
               className="ml-4 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
             >
               Continue to Phase 3
