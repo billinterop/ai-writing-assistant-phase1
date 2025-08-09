@@ -1,3 +1,4 @@
+// src/Phase2Gather.jsx
 import React, { useState } from "react";
 
 export default function Phase2Gather() {
@@ -55,7 +56,6 @@ export default function Phase2Gather() {
       if (notes.length > 0) {
         const mergedNotes = notes.join("\n\n");
         const notesBlob = new Blob([mergedNotes], { type: "text/plain" });
-        // give the Blob a name so UI shows it clearly
         notesBlob.name = "notes.txt";
         work.push(notesBlob);
       }
@@ -214,7 +214,7 @@ export default function Phase2Gather() {
         ) : null}
 
         {/* Actions */}
-        {results.length > 0 && (
+        {(combinedBullets.length > 0 || results.length > 0) && (
           <div className="flex gap-2 mb-3">
             <button className="px-3 py-1 text-sm border rounded" onClick={handleCopy}>
               Copy
