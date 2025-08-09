@@ -24,7 +24,6 @@ export default function Phase2Gather() {
   };
 
   const clearFiles = () => setFiles([]);
-  const clearNotes = () => setNotes([]);
 
   const addNote = () => {
     const v = noteDraft.trim();
