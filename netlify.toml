@@ -1,11 +1,26 @@
+# netlify.toml (repo root)
+
 [build]
+  # Monorepo: your app lives in phase2-gather/
   base      = "phase2-gather"
   publish   = "build"
   command   = "npm run build"
-  functions = "netlify/functions"
+  functions = "netlify/functions"   # resolved relative to base -> phase2-gather/netlify/functions
 
 [functions]
   node_bundler = "esbuild"
 
 [build.environment]
   NODE_VERSION = "18"
+
+# SPA redirects so /phase3 (and any future path) serves index.html
+[[redirects]]
+  from = "/phase3"
+  to = "/index.html"
+  status = 200
+
+# Catch‑all to support any client-side routes
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
