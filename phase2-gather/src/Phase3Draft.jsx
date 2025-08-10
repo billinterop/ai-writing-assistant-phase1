@@ -1,12 +1,11 @@
-import React, { useEffect, useRef, useState } from "react";
-import { Link } from "react-router-dom";
+import React, { useEffect, useState } from "react";
 
 export default function Phase3Draft() {
   const [seed, setSeed] = useState(null);
   const [draft, setDraft] = useState("");
-  const draftRef = useRef(null);
 
   // Load saved summary on mount and auto-fill the draft once
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     const raw = localStorage.getItem("phase3_seed_summary");
     if (!raw) return;
@@ -15,111 +14,113 @@ export default function Phase3Draft() {
       const parsed = JSON.parse(raw);
       setSeed(parsed);
 
-      // If first-time (no existing draft), auto-fill from bullets
-      if (!draft) {
-        const bullets =
-          parsed?.combinedBullets?.length
-            ? parsed.combinedBullets
-            : (parsed?.results?.[0]?.bullets || []);
-        const text = bullets.map((b) => `• ${b}`).join("\n");
+      // If we have combined bullets, prefill the draft automatically
+      if (parsed?.combinedBullets?.length) {
+        const text = parsed.combinedBullets.map((b) => `• ${b}`).join("\n");
         setDraft(text);
 
-        // After paint, scroll/focus to textarea to start typing
+        // Smooth scroll to the draft textarea so the user lands where they type
         setTimeout(() => {
-          draftRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-          draftRef.current?.focus();
+          const el = document.getElementById("draftTextArea");
+          if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
         }, 0);
       }
     } catch {
-      // ignore
+      // ignore parse errors silently
     }
-  }, []); // run once
+  }, []);
 
-  const handleStartWithOutline = () => {
-    if (!seed) return;
-    const bullets =
-      seed?.combinedBullets?.length ? seed.combinedBullets : (seed?.results?.[0]?.bullets || []);
-    const text = bullets.map((b) => `• ${b}`).join("\n");
+  const applyOutline = () => {
+    if (!seed?.combinedBullets?.length) return;
+    const text = seed.combinedBullets.map((b) => `• ${b}`).join("\n");
     setDraft(text);
 
-    setTimeout(() => {
-      draftRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-      draftRef.current?.focus();
-    }, 0);
+    // bring the text area into view when applying
+    const el = document.getElementById("draftTextArea");
+    if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
   };
 
-  const fileList =
-    seed?.sourceFiles?.length
-      ? seed.sourceFiles.map((f) => f.name).join(", ")
-      : "—";
-
   return (
-    <div className="h-screen flex flex-col bg-white">
-      {/* Top bar */}
-      <div className="flex items-center gap-3 p-6 border-b">
-        <h2 className="text-xl font-semibold">Phase 3 — Draft</h2>
-        <div className="ml-auto flex items-center gap-3">
-          <Link className="text-sm text-blue-700 underline" to="/phase2">
+    <div className="min-h-screen bg-white">
+      <div className="max-w-4xl mx-auto px-6 py-8">
+        <div className="flex items-center justify-between mb-6">
+          <h1 className="text-2xl font-semibold">Phase 3: Draft</h1>
+          <a
+            href="/"
+            className="text-sm text-blue-600 hover:underline"
+            title="Back to Phase 2"
+          >
             ← Back to Phase 2
-          </Link>
+          </a>
         </div>
-      </div>
 
-      {/* Content */}
-      <div className="p-6 overflow-y-auto">
-        {!seed ? (
-          <div className="text-gray-600">
-            <p className="mb-3">
-              No saved summary found. Head back to <Link className="text-blue-700 underline" to="/phase2">Phase 2</Link>, create a summary, and click <b>Save Summary and Continue to Phase 3</b>.
-            </p>
-          </div>
-        ) : (
-          <>
-            {/* Context block */}
-            <div className="mb-4 text-sm text-gray-700">
-              <div><span className="font-medium">Saved:</span> {new Date(seed.savedAt).toLocaleString()}</div>
-              <div><span className="font-medium">Sources:</span> {fileList}</div>
-              <div><span className="font-medium">Notes:</span> {seed.noteCount ?? 0}</div>
+        {/* Seed summary context */}
+        {seed ? (
+          <div className="mb-6 bg-gray-50 border rounded p-4">
+            <div className="flex flex-wrap items-center gap-3 text-sm text-gray-700">
+              <span>
+                <span className="font-medium">Mode:</span> {seed.mode || "combined"}
+              </span>
+              {Array.isArray(seed.sourceFiles) && (
+                <span>
+                  <span className="font-medium">Files:</span> {seed.sourceFiles.length}
+                </span>
+              )}
+              {typeof seed.noteCount === "number" && (
+                <span>
+                  <span className="font-medium">Notes:</span> {seed.noteCount}
+                </span>
+              )}
+              {seed.savedAt && (
+                <span className="text-gray-500">
+                  Saved {new Date(seed.savedAt).toLocaleString()}
+                </span>
+              )}
             </div>
 
             {/* Outline preview */}
-            <div className="mb-4 bg-gray-50 border rounded p-4">
-              <h4 className="font-medium mb-2">Outline from Phase 2</h4>
-              <ul className="list-disc pl-5 space-y-1">
-                {(seed.combinedBullets?.length
-                  ? seed.combinedBullets
-                  : (seed.results?.[0]?.bullets || [])
-                ).map((b, i) => (
-                  <li key={i}>{b}</li>
-                ))}
-              </ul>
+            {Array.isArray(seed.combinedBullets) && seed.combinedBullets.length > 0 && (
+              <div className="mt-4">
+                <h2 className="font-medium mb-2">Key Points from Your Material</h2>
+                <ul className="list-disc pl-5 space-y-1 text-sm">
+                  {seed.combinedBullets.map((b, i) => (
+                    <li key={i}>{b}</li>
+                  ))}
+                </ul>
 
-              <div className="mt-3">
-                <button
-                  className="px-3 py-1 text-sm border rounded"
-                  onClick={handleStartWithOutline}
-                >
-                  Start with this outline
-                </button>
+                <div className="mt-3">
+                  <button
+                    type="button"
+                    className="px-3 py-1 text-sm border rounded hover:bg-gray-50"
+                    onClick={applyOutline}
+                    title="Insert the outline bullets into the draft editor"
+                  >
+                    Start with this outline
+                  </button>
+                </div>
               </div>
-            </div>
-
-            {/* Draft editor */}
-            <div>
-              <label className="block font-medium mb-2" htmlFor="draft">
-                Draft
-              </label>
-              <textarea
-                id="draft"
-                ref={draftRef}
-                className="border p-3 rounded w-full h-64"
-                placeholder="Begin your draft here..."
-                value={draft}
-                onChange={(e) => setDraft(e.target.value)}
-              />
-            </div>
-          </>
+            )}
+          </div>
+        ) : (
+          <div className="mb-6 text-sm text-gray-600">
+            No saved summary found. Go back to Phase 2 to create one.
+          </div>
         )}
+
+        {/* Draft editor */}
+        <div>
+          <label htmlFor="draftTextArea" className="block font-medium mb-2">
+            Draft
+          </label>
+          <textarea
+            id="draftTextArea"
+            rows={14}
+            className="w-full border rounded p-3 font-mono text-sm"
+            placeholder="Start drafting here…"
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+          />
+        </div>
       </div>
     </div>
   );
