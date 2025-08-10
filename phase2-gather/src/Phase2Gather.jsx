@@ -347,15 +347,15 @@ export default function Phase2Gather() {
         {/* Sticky bottom: Continue only (auto-saves first) */}
         {(combinedBullets.length > 0 || results.length > 0) && (
           <div className="sticky bottom-0 bg-white border-t pt-3 flex">
-            <button
-              className="ml-auto px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
-              onClick={() => {
-                handleInsertIntoDraft(); // auto-save first
-                window.location.href = "https://interopsystems.com";
-              }}
-            >
-              Save Summary and Continue to Phase 3
-            </button>
+<button
+  className="ml-auto px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+  onClick={() => {
+    handleInsertIntoDraft(); // save first
+    window.location.href = "/phase3"; // then go
+  }}
+>
+  Save Summary and Continue to Phase 3
+</button>
           </div>
         )}
       </div>
