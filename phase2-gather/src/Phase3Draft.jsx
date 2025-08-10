@@ -1,11 +1,11 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 
 export default function Phase3Draft() {
   const [seed, setSeed] = useState(null);
   const [draft, setDraft] = useState("");
+  const draftRef = useRef(null);
 
   // Load saved summary on mount and auto-fill the draft once
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     const raw = localStorage.getItem("phase3_seed_summary");
     if (!raw) return;
@@ -14,114 +14,91 @@ export default function Phase3Draft() {
       const parsed = JSON.parse(raw);
       setSeed(parsed);
 
-      // If we have combined bullets, prefill the draft automatically
-      if (parsed?.combinedBullets?.length) {
-        const text = parsed.combinedBullets.map((b) => `• ${b}`).join("\n");
-        setDraft(text);
+      // Build a sensible default outline based on the seed
+      const outline =
+        parsed?.mode === "combined"
+          ? [
+              "Key Points Outline",
+              "",
+              ...(parsed.combinedBullets || []).map((b) => `• ${b}`),
+            ].join("\n")
+          : [
+              "Per‑file Outline",
+              "",
+              ...(parsed.results || []).flatMap((r) => [
+                `# ${r.name}`,
+                ...(r.bullets || []).map((b) => `• ${b}`),
+                "",
+              ]),
+            ].join("\n");
 
-        // Smooth scroll to the draft textarea so the user lands where they type
-        setTimeout(() => {
-          const el = document.getElementById("draftTextArea");
-          if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
-        }, 0);
-      }
-    } catch {
-      // ignore parse errors silently
+      setDraft(outline);
+    } catch (e) {
+      // ignore parse errors
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const applyOutline = () => {
-    if (!seed?.combinedBullets?.length) return;
-    const text = seed.combinedBullets.map((b) => `• ${b}`).join("\n");
-    setDraft(text);
+  // Auto-focus and scroll the draft area when it first has content
+  useEffect(() => {
+    if (draft && draftRef.current) {
+      draftRef.current.focus();
+      draftRef.current.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  }, [draft]);
 
-    // bring the text area into view when applying
-    const el = document.getElementById("draftTextArea");
-    if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+  const copyOutline = () => {
+    const outlineText = draft || "";
+    if (!outlineText.trim()) return;
+    navigator.clipboard.writeText(outlineText);
+  };
+
+  const startWithOutline = () => {
+    // Already loaded into draft on first mount, but keep this for UX parity
+    if (draftRef.current) {
+      draftRef.current.focus();
+      draftRef.current.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
   };
 
   return (
-    <div className="min-h-screen bg-white">
-      <div className="max-w-4xl mx-auto px-6 py-8">
-        <div className="flex items-center justify-between mb-6">
-          <h1 className="text-2xl font-semibold">Phase 3: Draft</h1>
-          <a
-            href="/"
-            className="text-sm text-blue-600 hover:underline"
-            title="Back to Phase 2"
-          >
-            ← Back to Phase 2
-          </a>
-        </div>
-
-        {/* Seed summary context */}
-        {seed ? (
-          <div className="mb-6 bg-gray-50 border rounded p-4">
-            <div className="flex flex-wrap items-center gap-3 text-sm text-gray-700">
-              <span>
-                <span className="font-medium">Mode:</span> {seed.mode || "combined"}
-              </span>
-              {Array.isArray(seed.sourceFiles) && (
-                <span>
-                  <span className="font-medium">Files:</span> {seed.sourceFiles.length}
-                </span>
-              )}
-              {typeof seed.noteCount === "number" && (
-                <span>
-                  <span className="font-medium">Notes:</span> {seed.noteCount}
-                </span>
-              )}
-              {seed.savedAt && (
-                <span className="text-gray-500">
-                  Saved {new Date(seed.savedAt).toLocaleString()}
-                </span>
-              )}
-            </div>
-
-            {/* Outline preview */}
-            {Array.isArray(seed.combinedBullets) && seed.combinedBullets.length > 0 && (
-              <div className="mt-4">
-                <h2 className="font-medium mb-2">Key Points from Your Material</h2>
-                <ul className="list-disc pl-5 space-y-1 text-sm">
-                  {seed.combinedBullets.map((b, i) => (
-                    <li key={i}>{b}</li>
-                  ))}
-                </ul>
-
-                <div className="mt-3">
-                  <button
-                    type="button"
-                    className="px-3 py-1 text-sm border rounded hover:bg-gray-50"
-                    onClick={applyOutline}
-                    title="Insert the outline bullets into the draft editor"
-                  >
-                    Start with this outline
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
-        ) : (
-          <div className="mb-6 text-sm text-gray-600">
-            No saved summary found. Go back to Phase 2 to create one.
-          </div>
-        )}
-
-        {/* Draft editor */}
-        <div>
-          <label htmlFor="draftTextArea" className="block font-medium mb-2">
-            Draft
-          </label>
-          <textarea
-            id="draftTextArea"
-            rows={14}
-            className="w-full border rounded p-3 font-mono text-sm"
-            placeholder="Start drafting here…"
-            value={draft}
-            onChange={(e) => setDraft(e.target.value)}
-          />
-        </div>
+    <div className="max-w-3xl mx-auto p-6">
+      <div className="flex items-center justify-between mb-4">
+        <h2 className="text-xl font-semibold">Phase 3 — Draft</h2>
+        <a className="px-3 py-1 text-sm border rounded" href="/" title="Back to Phase 1">
+          ← Back to Phase 1
+        </a>
       </div>
+
+      {seed ? (
+        <div className="mb-4 text-sm text-gray-600">
+          <div>Loaded summary saved: <b>{new Date(seed.savedAt).toLocaleString()}</b></div>
+          <div>Files: <b>{seed.sourceFiles?.length || 0}</b>, Notes: <b>{seed.noteCount || 0}</b></div>
+        </div>
+      ) : (
+        <div className="mb-4 text-sm text-red-600">
+          No saved summary found. Go back to Phase 2 and click “Save Summary and Continue to Phase 3.”
+        </div>
+      )}
+
+      {/* Draft editor */}
+      <div className="mb-3 flex items-center gap-2">
+        <button className="px-3 py-1 text-sm border rounded" onClick={copyOutline}>
+          Copy Outline
+        </button>
+        <button className="px-3 py-1 text-sm border rounded" onClick={startWithOutline}>
+          Start with this outline
+        </button>
+      </div>
+
+      <textarea
+        ref={draftRef}
+        rows={18}
+        className="w-full border rounded p-3"
+        value={draft}
+        onChange={(e) => setDraft(e.target.value)}
+        placeholder="Your draft starts here…"
+      />
     </div>
   );
 }

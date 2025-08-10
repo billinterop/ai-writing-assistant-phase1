@@ -1,14 +1,14 @@
-import { Routes, Route, Navigate } from "react-router-dom";
+import React from "react";
 import Phase2Gather from "./Phase2Gather";
 import Phase3Draft from "./Phase3Draft";
 
 export default function App() {
-  return (
-    <Routes>
-      <Route path="/" element={<Navigate to="/phase2" replace />} />
-      <Route path="/phase2" element={<Phase2Gather />} />
-      <Route path="/phase3" element={<Phase3Draft />} />
-      <Route path="*" element={<Navigate to="/phase2" replace />} />
-    </Routes>
-  );
+  const path = window.location.pathname;
+
+  if (path === "/phase3") {
+    return <Phase3Draft />;
+  }
+
+  // Default to Phase 2
+  return <Phase2Gather />;
 }

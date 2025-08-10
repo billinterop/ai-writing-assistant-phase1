@@ -1,5 +1,4 @@
 import React, { useState } from "react";
-import { useNavigate } from "react-router-dom";
 
 export default function Phase2Gather() {
   // Inputs
@@ -10,32 +9,42 @@ export default function Phase2Gather() {
   // Output + UI state
   const [results, setResults] = useState([]);        // [{ name, bullets: [] }]
   const [combinedBullets, setCombinedBullets] = useState([]);
-  const [mode, setMode] = useState("combined");      // 'combined' | 'per-file' (per-file shows the "Combined" block for now)
+  const [mode, setMode] = useState("combined");      // 'combined' | 'per-file' (combined result labeled)
   const [isSummarizing, setIsSummarizing] = useState(false);
   const [error, setError] = useState("");
 
-  const navigate = useNavigate();
+  // Phase label / top nav
+  const PhaseHeader = () => (
+    <div className="flex items-center justify-between mb-4">
+      <h2 className="text-xl font-semibold">Phase 2 — Gather</h2>
+      <a
+        className="px-3 py-1 text-sm border rounded"
+        href="/"
+        title="Back to Phase 1"
+      >
+        ← Back to Phase 1
+      </a>
+    </div>
+  );
 
-  // ========== Files ==========
   const handleFileChange = (e) => {
     const newFiles = Array.from(e.target.files || []);
     setFiles((prev) => [...prev, ...newFiles]);
   };
-  const removeFile = (idx) => {
+
+  const removeFileAt = (idx) => {
     setFiles((prev) => prev.filter((_, i) => i !== idx));
   };
+
   const clearFiles = () => setFiles([]);
 
-  // ========== Notes ==========
   const addNote = () => {
     const v = noteDraft.trim();
     if (!v) return;
     setNotes((prev) => [...prev, v]);
     setNoteDraft("");
   };
-  const removeNote = (idx) => {
-    setNotes((prev) => prev.filter((_, i) => i !== idx));
-  };
+
   const clearNotes = () => setNotes([]);
 
   // Helper: read a File -> { name, type, base64 }
@@ -85,16 +94,20 @@ export default function Phase2Gather() {
         throw new Error(data?.error || `Summarize failed (${res.status})`);
       }
 
-      // Split into bullets, strip leading markers, and drop the model’s heading line if present
       const bullets = (data.summary || "")
         .split("\n")
+        // strip typical bullets/dashes
         .map((s) => s.replace(/^[-•\s]+/, "").trim())
-        .filter(Boolean)
-        .filter((line) => !/^key points from your material[:：]?$/i.test(line));
+        // remove that optional model header if it comes back as a bullet
+        .filter((line) => line && !/^key points from your material:?$/i.test(line));
 
-      // Always keep combined bullets; per-file view will show a single “Combined” block (by design)
-      setCombinedBullets(bullets);
-      setResults([{ name: "Combined", bullets }]);
+      if (mode === "combined") {
+        setCombinedBullets(bullets);
+        setResults([]);
+      } else {
+        setResults([{ name: "Combined", bullets }]);
+        setCombinedBullets([]);
+      }
     } catch (e) {
       console.error(e);
       setError(e.message || "Something went wrong.");
@@ -126,48 +139,35 @@ export default function Phase2Gather() {
     URL.revokeObjectURL(url);
   };
 
-  const handleSaveAndGo = () => {
+  const saveForPhase3 = () => {
     const payload = {
       mode,
       combinedBullets,
       results,
       savedAt: new Date().toISOString(),
-      sourceFiles: files.map((f) => ({ name: f.name, type: f.type || "", size: f.size })),
-      noteCount: notes.length + (noteDraft.trim() ? 1 : 0),
+      sourceFiles: files.map((f) => ({ name: f.name, type: f.type || "", size: f.size || 0 })),
+      noteCount: notes.length,
     };
     localStorage.setItem("phase3_seed_summary", JSON.stringify(payload));
-    navigate("/phase3");
+  };
+
+  const handleSaveAndGo = () => {
+    saveForPhase3();
+    // no router, just direct navigation (adjust path later if needed)
+    window.location.href = "/phase3";
   };
 
   return (
     <div className="flex h-screen bg-white">
-      {/* LEFT: Inputs */}
+      {/* Left Panel – Upload and Notes */}
       <div className="w-1/2 p-6 border-r overflow-y-auto">
-        {/* Top bar */}
-        <div className="flex items-center gap-3 mb-4">
-          <h2 className="text-xl font-semibold">Phase 2 — Gather & Summarize</h2>
-          <div className="ml-auto">
-            <button
-              className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
-              onClick={handleSaveAndGo}
-              disabled={combinedBullets.length === 0 && results.length === 0}
-              title={combinedBullets.length === 0 && results.length === 0 ? "Run a summary first" : "Save outline and continue"}
-            >
-              Save Summary and Continue to Phase 3
-            </button>
-          </div>
-        </div>
+        <PhaseHeader />
+
+        <h3 className="text-lg font-semibold mb-4">📥 Add Your Material</h3>
 
         {/* Upload */}
         <div className="mb-6">
-          <div className="flex items-center justify-between mb-2">
-            <label className="block font-medium">Upload files:</label>
-            {files.length > 0 && (
-              <button className="text-sm text-gray-700 underline" onClick={clearFiles}>
-                Clear files
-              </button>
-            )}
-          </div>
+          <label className="block font-medium mb-2">Upload files:</label>
           <input
             type="file"
             accept=".pdf,.docx,.txt"
@@ -175,19 +175,19 @@ export default function Phase2Gather() {
             onChange={handleFileChange}
             className="border p-2 rounded w-full"
           />
-          {/* file chips */}
+
+          {/* file chips with remove */}
           {files.length > 0 && (
-            <div className="mt-2 flex flex-wrap gap-2">
+            <div className="mt-3 flex flex-wrap gap-2">
               {files.map((file, idx) => (
                 <span
                   key={idx}
-                  className="inline-flex items-center gap-2 px-2 py-1 text-sm bg-gray-100 border rounded"
-                  title={file.name}
+                  className="inline-flex items-center gap-2 px-2 py-1 text-sm border rounded bg-gray-50"
                 >
-                  <span className="max-w-[14rem] truncate">{file.name}</span>
+                  {file.name}
                   <button
-                    className="text-gray-500 hover:text-red-600"
-                    onClick={() => removeFile(idx)}
+                    className="text-red-600 hover:underline"
+                    onClick={() => removeFileAt(idx)}
                     aria-label={`Remove ${file.name}`}
                     title="Remove"
                   >
@@ -197,21 +197,24 @@ export default function Phase2Gather() {
               ))}
             </div>
           )}
+
+          <div className="mt-2">
+            <button
+              className="px-3 py-1 text-sm border rounded"
+              onClick={clearFiles}
+              disabled={files.length === 0}
+              title="Clear all uploaded files"
+            >
+              Clear files
+            </button>
+          </div>
         </div>
 
         {/* Notes */}
         <div className="mb-4">
-          <div className="flex items-center justify-between mb-2">
-            <label className="block font-medium">Paste notes or text:</label>
-            {notes.length > 0 && (
-              <button className="text-sm text-gray-700 underline" onClick={clearNotes}>
-                Clear notes
-              </button>
-            )}
-          </div>
-
+          <label className="block font-medium mb-2">Paste notes or text:</label>
           <textarea
-            placeholder="Paste raw passages, quotes, or briefing notes here. This is for source snippets only — goals, audience, and tone already come from Phase 1."
+            placeholder="Paste raw excerpts, quotes, or your own notes here — e.g., passages you want to keep, stats to check, or fragments you plan to stitch together. (Phase 1 already captured goals, audience, voice, and tone.)"
             rows={6}
             className="border p-2 rounded w-full"
             value={noteDraft}
@@ -225,28 +228,23 @@ export default function Phase2Gather() {
             >
               Add note
             </button>
+            <button
+              className="px-3 py-1 text-sm border rounded"
+              onClick={clearNotes}
+              disabled={notes.length === 0 && !noteDraft.trim()}
+            >
+              Clear notes
+            </button>
             {notes.length > 0 && (
               <span className="text-sm text-gray-600">
                 {notes.length} saved note{notes.length > 1 ? "s" : ""}
               </span>
             )}
           </div>
-
-          {/* saved notes list */}
           {notes.length > 0 && (
-            <ul className="mt-2 text-sm text-gray-700 space-y-1">
-              {notes.map((n, idx) => (
-                <li key={idx} className="flex items-center justify-between border rounded p-2">
-                  <span className="truncate pr-3">Note #{idx + 1}</span>
-                  <button
-                    className="text-gray-500 hover:text-red-600"
-                    onClick={() => removeNote(idx)}
-                    aria-label={`Remove note ${idx + 1}`}
-                    title="Remove note"
-                  >
-                    ×
-                  </button>
-                </li>
+            <ul className="mt-2 text-sm text-gray-600 list-disc pl-5">
+              {notes.map((_, idx) => (
+                <li key={idx}>Note #{idx + 1}</li>
               ))}
             </ul>
           )}
@@ -285,13 +283,34 @@ export default function Phase2Gather() {
             {isSummarizing ? "Summarizing…" : "Summarize All"}
           </button>
         </div>
-
-        {error && <div className="mt-3 text-sm text-red-600">{error}</div>}
       </div>
 
-      {/* RIGHT: Summary */}
+      {/* Right Panel – Summary */}
       <div className="w-1/2 p-6 overflow-y-auto">
-        <h2 className="text-xl font-semibold mb-4">📝 Summary</h2>
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-xl font-semibold">📝 Summary</h2>
+
+          {/* Top-right actions (stick to summary panel) */}
+          {(combinedBullets.length > 0 || results.length > 0) && (
+            <div className="flex gap-2">
+              <button className="px-3 py-1 text-sm border rounded" onClick={handleCopy}>
+                Copy
+              </button>
+              <button className="px-3 py-1 text-sm border rounded" onClick={handleDownload}>
+                Download .txt
+              </button>
+              <button
+                className="px-3 py-1 text-sm border rounded"
+                onClick={handleSaveAndGo}
+                title="Save summary and continue"
+              >
+                Save Summary and Continue to Phase 3
+              </button>
+            </div>
+          )}
+        </div>
+
+        {error && <div className="text-sm text-red-600 mb-3">{error}</div>}
 
         {!isSummarizing && results.length === 0 && combinedBullets.length === 0 ? (
           <p className="text-gray-500 italic">
@@ -299,29 +318,8 @@ export default function Phase2Gather() {
           </p>
         ) : null}
 
-        {/* Actions */}
-        {(combinedBullets.length > 0 || results.length > 0) && (
-          <div className="flex gap-2 mb-3">
-            <button className="px-3 py-1 text-sm border rounded" onClick={handleCopy}>
-              Copy
-            </button>
-            <button className="px-3 py-1 text-sm border rounded" onClick={handleDownload}>
-              Download .txt
-            </button>
-            <button
-              className="px-3 py-1 text-sm border rounded"
-              onClick={handleSaveAndGo}
-              title="Save outline and continue to Phase 3"
-            >
-              Save Summary and Continue to Phase 3
-            </button>
-          </div>
-        )}
-
-        {/* Loading */}
         {isSummarizing && <div className="text-sm text-gray-600 mb-3">Summarizing…</div>}
 
-        {/* Combined view */}
         {!isSummarizing && mode === "combined" && combinedBullets.length > 0 && (
           <div className="bg-gray-50 border rounded p-4">
             <h4 className="font-medium mb-2">Key Points from Your Material</h4>
@@ -333,7 +331,6 @@ export default function Phase2Gather() {
           </div>
         )}
 
-        {/* Per-file view (currently shows the one "Combined" block) */}
         {!isSummarizing && mode === "per-file" && results.length > 0 && (
           <div className="space-y-4">
             {results.map((r, idx) => (
