@@ -52,8 +52,48 @@ exports.handler = async (event) => {
     }
 
     // OpenAI call
-    const apiKey = process.env.OPENAI_API_KEY;
-    if (!apiKey) return json(500, { error: "OPENAI_API_KEY not set on server." });
+// --- Azure OpenAI call (drop-in replacement for the OpenAI section) ---
+const azureEndpoint   = process.env.AZURE_OPENAI_ENDPOINT;   // e.g., https://interop-azure-oai-1.openai.azure.com
+const azureKey        = process.env.AZURE_OPENAI_API_KEY;
+const azureDeployment = process.env.AZURE_OPENAI_DEPLOYMENT || "gpt-5-mini";
+const azureApiVersion = process.env.AZURE_OPENAI_API_VERSION || "2024-12-01-preview";
+const PROVIDER = process.env.LLM_PROVIDER || "azure"; // "azure" | "openai"
+
+if (!azureEndpoint || !azureKey) {
+  return json(500, { error: "Missing AZURE_OPENAI_* env vars on server." });
+}
+
+const url = `${azureEndpoint}/openai/deployments/${azureDeployment}/chat/completions?api-version=${azureApiVersion}`;
+
+const ai = await fetch(url, {
+  method: "POST",
+  headers: {
+    "api-key": azureKey,
+    "Content-Type": "application/json"
+  },
+  body: JSON.stringify({
+    // In Azure, `model` should equal your DEPLOYMENT name
+    model: azureDeployment,
+    messages: [
+      { role: "system", content: "You are a precise, concise summarizer." },
+      { role: "user", content: prompt } // keep your existing prompt variable
+    ],
+    temperature: 0.2
+  })
+});
+
+if (!ai.ok) {
+  const errTxt = await ai.text().catch(() => "");
+  return json(502, {
+    error: "Azure OpenAI request failed",
+    status: ai.status,
+    details: slice(errTxt, 800)
+  });
+}
+
+const payload = await ai.json();
+const summary = payload?.choices?.[0]?.message?.content?.trim() || "(No summary produced)";
+return json(200, { summary });
 
     const prompt = `Summarize the following material into 5–10 crisp, non‑duplicative bullets for a working outline.
 Use plain language, one sentence per bullet, and group related points. Start with “Key points from your material”.
